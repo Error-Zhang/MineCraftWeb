@@ -1,0 +1,38 @@
+{
+  "name": "minecraft",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@babylonjs/core": "^8.3.1",
+    "@babylonjs/gui": "^8.3.1",
+    "@babylonjs/gui-editor": "^8.3.1",
+    "@babylonjs/inspector": "^8.3.1",
+    "@babylonjs/loaders": "^8.3.1",
+    "@babylonjs/materials": "^8.3.1",
+    "@babylonjs/serializers": "^8.3.1",
+    "comlink": "^4.4.2",
+    "fastnoise-lite": "^1.1.1",
+    "idb": "^8.0.2",
+    "less": "^4.3.0",
+    "less-loader": "^12.2.0",
+    "p-queue": "^8.1.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
+  },
+  "devDependencies": {
+    "@types/noisejs": "^2.1.0",
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "globals": "^16.0.0",
+    "typescript": "~5.7.2",
+    "vite": "^6.3.1"
+  }
+}
