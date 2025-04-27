@@ -1,8 +1,9 @@
 import FastNoiseLite from "fastnoise-lite";
-import { World } from "@/game-root/world/World.ts";
-import { Chunk, CHUNK_SIZE } from "@/game-root/world/Chunk.ts";
-import { Scene, Vector2, Vector3 } from "@babylonjs/core";
-import GrassBlock from "@/blocks/natures/GrassBlock.ts";
+import {World} from "@/game-root/world/World.ts";
+import {Chunk, CHUNK_SIZE} from "@/game-root/world/Chunk.ts";
+import {Scene, Vector2, Vector3} from "@babylonjs/core";
+import blockFactory from "@/blocks/core/BlockFactory.ts";
+import {Blocks} from "@/blocks/core/Blocks.ts";
 
 interface NoiseOptions {
     seed?: number;
@@ -11,7 +12,7 @@ interface NoiseOptions {
     octaves?: number;
 }
 
-export class WorldGenerator {
+class WorldGenerator {
     private scene: Scene;
     private noise: typeof FastNoiseLite;
     private seed: number;
@@ -53,8 +54,8 @@ export class WorldGenerator {
     generateFlatWorld(radius: number, height: number = 0): World {
         const world = new World(this.scene);
 
-        for (let cx = -radius; cx <= radius; cx++) {
-            for (let cz = -radius; cz <= radius; cz++) {
+        for (let cx = -radius; cx < radius; cx++) {
+            for (let cz = -radius; cz < radius; cz++) {
                 const chunk = this.createFlatChunk(cx, cz, height, world);
                 world.setChunk(new Vector2(cx, cz), chunk);
                 chunk.render();
@@ -72,7 +73,7 @@ export class WorldGenerator {
                 const wx = cx * CHUNK_SIZE + x;
                 const wz = cz * CHUNK_SIZE + z;
 
-                const block = new GrassBlock(this.scene,new Vector3(wx, height, wz));
+                const block = blockFactory.createBlock(this.scene,Blocks.Grass, new Vector3(wx, height, wz));
                 chunk.setBlock(new Vector3(x, height, z), block);
             }
         }
@@ -80,3 +81,4 @@ export class WorldGenerator {
         return chunk;
     }
 }
+export default WorldGenerator;

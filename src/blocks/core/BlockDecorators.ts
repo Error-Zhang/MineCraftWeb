@@ -1,4 +1,4 @@
-import {Blocks} from "@/enums/Blocks.ts";
+import {Blocks} from "@/blocks/core/Blocks.ts";
 
 interface BlockInfo {
     description: string;

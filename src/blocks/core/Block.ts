@@ -7,33 +7,39 @@ import {
     Vector4,
     Mesh,
     AbstractMesh,
-    ImportMeshAsync, TransformNode, MeshBuilder, Color4
+    ImportMeshAsync, TransformNode, MeshBuilder
 } from "@babylonjs/core";
-import {Blocks, getBlocksKey} from "@/enums/Blocks.ts";
-import {Assets, getBlockModel} from "@/enums/Assets.ts";
-import BlockMeshBuilder, {FaceType} from "@/game-root/utils/BlockMeshBuilder.ts";
-import {MaterialManager} from "@/game-root/utils/MaterialManager.ts";
+import {Blocks} from "@/blocks/core/Blocks.ts";
+import {Assets} from "@/assets";
+import BlockMeshBuilder, {FaceType} from "@/blocks/core/BlockMeshBuilder.ts";
+import {BlockMaterialManager} from "@/blocks/core/BlockMaterialManager.ts";
+import {BlockRecipe} from "@/blocks/core/BlockTypes.ts";
+
 
 interface BlockProps {
     scene: Scene;
-    blockType: Blocks;
     position: Vector3;
     isTransparent?: boolean
 }
 
 export abstract class Block {
     readonly scene: Scene;
-    readonly blockType: Blocks;
+    static readonly __blockType: Blocks; // 在BlockEntity注解中自动生成
     readonly position: Vector3;
     readonly isTransparent: boolean;
+    protected readonly maxCount: number = 40;
 
     protected constructor(
-        {scene, blockType, position, isTransparent}: BlockProps
+        {scene, position, isTransparent}: BlockProps
     ) {
         this.scene = scene;
-        this.blockType = blockType;
         this.position = position;
         this.isTransparent = isTransparent ?? false;
+    }
+
+    get blockType(): Blocks {
+        // 返回这个实例的类的 __blockType
+        return (this.constructor as typeof Block).__blockType;
     }
 
     abstract render(faces?: Partial<Record<FaceType, boolean>>): void;
@@ -41,6 +47,8 @@ export abstract class Block {
     abstract renderIcon(): void;
 
     abstract dispose(): void;
+
+    static getRecipes?: () => Generator<BlockRecipe>;
 }
 
 export abstract class TextureBlock extends Block {
@@ -49,6 +57,7 @@ export abstract class TextureBlock extends Block {
     static materialCache: Map<string, StandardMaterial> = new Map(); // 静态材质缓存
     static textureCache: Map<string, Texture> = new Map();           // 纹理缓存
     mesh: Mesh | undefined;
+    protected color: Color3 = new Color3(1, 1, 1);
 
     protected constructor(props: BlockProps & {
         uv: Vector4[]
@@ -57,9 +66,10 @@ export abstract class TextureBlock extends Block {
         this.uv = props.uv;
     }
 
-    protected _createMesh(texturePath: string, {faces, noCache}: {
+    protected _createMesh(texturePath: string, {faces, ...args}: {
         faces?: Partial<Record<FaceType, boolean>>,
-        noCache?: boolean
+        noCache?: boolean,
+        isEmissive?: boolean
     }) {
         const mesh = BlockMeshBuilder.createBlockMesh(this.blockType, {
             faceUV: this.uv,
@@ -70,8 +80,14 @@ export abstract class TextureBlock extends Block {
         mesh.edgesRenderer!.isEnabled = false; // 默认先关闭，否则会显示红色边框
         // 开启碰撞
         mesh.checkCollisions = true;
-        mesh.material = MaterialManager.getBlockMaterial({
-            scene: this.scene, blockType: this.blockType, texturePath, noCache
+        mesh.material = BlockMaterialManager.getBlockMaterial({
+            scene: this.scene,
+            blockType: this.blockType,
+            texturePath,
+            isTransparent: this.isTransparent,
+            color: this.color,
+            ...args
+
         });
         mesh.position = this.position;
         return mesh;
@@ -87,6 +103,7 @@ export abstract class TextureBlock extends Block {
             faces: {front: true, right: true, top: true},
             // 渲染icon不能使用缓存，因为缓存保存在了主场景中，图标生成使用的是临时的场景，两个场景不一致会获取不到
             noCache: true,
+            isEmissive:true,
         });
     }
 
@@ -106,7 +123,8 @@ export abstract class ModTextureBlock extends TextureBlock {
     override renderIcon() {
         this._createMesh(ModTextureBlock.texturePath, {
             faces: {front: true, right: true, top: true},
-            noCache: true
+            noCache: true,
+            isEmissive:true,
         });
     }
 }
@@ -118,15 +136,15 @@ export abstract class ModelBlock extends Block {
 
     protected constructor(
         props: BlockProps,
-        modelPath?: string
+        modelPath: string
     ) {
         super(props);
-        this.modelPath = modelPath ?? getBlockModel(getBlocksKey(props.blockType));
+        this.modelPath = modelPath;
     }
 
-    abstract setMaterial(mesh: AbstractMesh, config: { noCache: boolean }): void;
+    abstract setMaterial(mesh: AbstractMesh, config:any): void;
 
-    async loadModel(scene: Scene, config: { noCache: boolean }) {
+    async loadModel(scene: Scene, config: { noCache: boolean,isEmissive?:boolean, }) {
         let modelKey: string = `${this.blockType}Model`;
         const {meshes} = await ImportMeshAsync(this.modelPath, scene);
 
@@ -169,7 +187,7 @@ export abstract class ModelBlock extends Block {
     }
 
     async renderIcon() {
-        await this.loadModel(this.scene, {noCache: true});
+        await this.loadModel(this.scene, {noCache: true,isEmissive:true});
     }
 
     dispose(): void {

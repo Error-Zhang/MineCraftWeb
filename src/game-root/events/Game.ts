@@ -1,6 +1,9 @@
+import EventBus from "@/game-root/events/GameEventBus.ts";
+import {GameEvents} from "@/game-root/events/GameEvents.ts";
+
 type GameEventHandler = (...args:any) => void;
 
-class GameEventManager {
+class Game {
     private active = false;
     private canvas: HTMLCanvasElement;
 
@@ -9,7 +12,16 @@ class GameEventManager {
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
-        canvas.onclick= ()=> canvas.requestPointerLock();
+        canvas.onclick= ()=> {
+            canvas.requestPointerLock();
+            EventBus.emit(GameEvents.hiddenPanel)
+        }
+        document.addEventListener("keydown", (event: KeyboardEvent) => {
+            if(!this.active && (event.key.toLowerCase()==="e" || event.key.toLowerCase()==="f")) {
+                this.togglePointerLock();
+                EventBus.emit(GameEvents.hiddenPanel);
+            }
+        })
         document.addEventListener("pointerlockchange", this.onPointerLockChange);
     }
 
@@ -76,4 +88,4 @@ class GameEventManager {
         document.removeEventListener("pointerlockchange", this.onPointerLockChange);
     }
 }
-export default GameEventManager;
+export default Game;

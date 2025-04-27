@@ -1,36 +1,42 @@
-import { Engine, Scene, HemisphericLight, Vector3 } from "@babylonjs/core";
-import { Inspector } from '@babylonjs/inspector';
-import { CreativePlayer } from "@/game-root/player/Player.ts";
-import { WorldGenerator } from "@/game-root/world/WorldGenerator.ts";
+import {Engine, Scene, HemisphericLight, Vector3} from "@babylonjs/core";
+import {Inspector} from '@babylonjs/inspector';
+import {Player} from "@/game-root/player/Player.ts";
+import WorldGenerator from "@/game-root/world/WorldGenerator.ts";
 import SkySystem from "@/game-root/world/SkySystem.ts";
 import {World} from "@/game-root/world/World.ts";
+import GameStore, {GameMode} from "@/game-root/events/GameStore.ts";
+import TreeGenerator from "@/game-root/world/TreeGenerator.ts";
 
 export class Game {
     private engine: Engine;
     private scene: Scene;
-    private player: CreativePlayer;
+    private player: Player | undefined;
     private canvas: HTMLCanvasElement;
     private sky: SkySystem;
-    private world : World;
+    private world: World;
 
     constructor(canvas: HTMLCanvasElement) {
         console.log("Game started!");
         this.canvas = canvas;
 
-
         // 初始化 Babylon 引擎
-        this.engine = new Engine(canvas, true, { antialias: true }); // 提高渲染质量
+        this.engine = new Engine(canvas, false); // 取消抗锯齿防止边缘柔化
         this.scene = new Scene(this.engine);
 
         // 添加灯光
-        new HemisphericLight("light", new Vector3(0, 10, 0), this.scene);
+        const light = new HemisphericLight("light", new Vector3(10, 10, 10), this.scene);
 
         // 生成世界
         const wg = new WorldGenerator(this.scene);
-        this.world = wg.generateFlatWorld(0);
+        this.world = wg.generateFlatWorld(1);
+        const tg = new TreeGenerator(this.scene,this.world);
+        tg.generateTree(new Vector3(-2,0,-2))
 
         // 初始化玩家
-        this.player = new CreativePlayer(this.scene, this.canvas,this.world);
+        GameStore.on("gameMode",(gameMode)=>{
+            this.player = new Player(this.scene, this.canvas, this.world,gameMode);
+        })
+
         this.sky = new SkySystem(this.scene);
 
 
@@ -56,6 +62,7 @@ export class Game {
 
     dispose() {
         removeEventListener("resize", this.handleResize);
+        this.player?.dispose();
         this.engine.dispose();
     }
 }

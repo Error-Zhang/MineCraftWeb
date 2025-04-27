@@ -1,20 +1,46 @@
-import {BlockEntity} from "@/blocks/BlockDecorators.ts";
-import {Blocks} from "@/enums/Blocks.ts";
-import {ModelBlock, TextureBlock} from "@/blocks/Block.ts";
-import {AbstractMesh, Color3, Scene, StandardMaterial, Vector3} from "@babylonjs/core";
-import {MaterialManager} from "@/game-root/utils/MaterialManager.ts";
+import {BlockEntity} from "@/blocks/core/BlockDecorators.ts";
+import {Blocks} from "@/blocks/core/Blocks.ts";
+import {ModelBlock, TextureBlock} from "@/blocks/core/Block.ts";
+import {AbstractMesh, Scene, Vector3} from "@babylonjs/core";
+import {BlockMaterialManager} from "@/blocks/core/BlockMaterialManager.ts";
+import {IInteractableBlock} from "@/blocks/core/BlockInterfaces.ts";
+import {GameEvents} from "@/game-root/events/GameEvents.ts";
+import EventBus from "@/game-root/events/GameEventBus.ts";
+import {BlockRecipe} from "@/blocks/core/BlockTypes.ts";
+import {getBlockModel} from "@/assets";
 
 @BlockEntity(Blocks.CraftTable)
-class CraftTableBlock extends ModelBlock {
+class CraftTableBlock extends ModelBlock implements IInteractableBlock{
+    override maxCount: number = 1;
     constructor(scene: Scene, position: Vector3) {
-        super({scene, blockType: Blocks.CraftTable, position, isTransparent: true});
+        super({scene, position, isTransparent: true},getBlockModel("CraftTable"));
     }
 
-    override setMaterial(mesh: AbstractMesh, {noCache}: { noCache: boolean }): void {
-        const material = MaterialManager.getBlockMaterial({
-            scene: this.scene, texturePath: TextureBlock.texturePath, blockType: Blocks.CraftTable, noCache
+    onInteract(): void {
+        EventBus.emit(GameEvents.interactWithCraftTable)
+    }
+
+    override setMaterial(mesh: AbstractMesh, config:any): void {
+        const material = BlockMaterialManager.getBlockMaterial({
+            scene: this.scene,
+            texturePath: TextureBlock.texturePath,
+            blockType: Blocks.CraftTable,
+            ...config
         });
         mesh.material = material;
+    }
+
+    static override *getRecipes(): Generator<BlockRecipe> {
+        yield {
+            pattern: [
+                [Blocks.Board, Blocks.Board],
+                [Blocks.Board, Blocks.Board]
+            ],
+            output: {
+                item: this.__blockType, // 使用注解中的字段
+                count: 1
+            }
+        };
     }
 }
 

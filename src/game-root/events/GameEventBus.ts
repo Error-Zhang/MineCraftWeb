@@ -1,25 +1,25 @@
-import {GameEvents} from "@/enums/GameEvents.ts";
+import {GameEvents} from "@/game-root/events/GameEvents.ts";
 
 type EventCallback = (...args: any[]) => void;
 
-class EventBus {
-    private events: Map<GameEvents, EventCallback[]> = new Map();
+class GameEventBus {
+    private events: Map<GameEvents | string, EventCallback[]> = new Map();
 
-    on(event: GameEvents, callback: EventCallback) {
+    on(event: GameEvents | string, callback: EventCallback) {
         if (!this.events.has(event)) {
             this.events.set(event, []);
         }
         this.events.get(event)!.push(callback);
     }
 
-    off(event: GameEvents, callback: EventCallback) {
+    off(event: GameEvents | string, callback: EventCallback) {
         const listeners = this.events.get(event);
         if (listeners) {
             this.events.set(event, listeners.filter(cb => cb !== callback));
         }
     }
 
-    emit(event: GameEvents, data?: object, callback?: EventCallback) {
+    emit(event: GameEvents | string, data?: object, callback?: EventCallback) {
         const listeners = this.events.get(event);
         if (listeners) {
             listeners.forEach(cb => cb(data, callback));
@@ -31,5 +31,6 @@ class EventBus {
     }
 }
 
-const eventBus = new EventBus();
-export default eventBus;
+const gameEventBus = new GameEventBus();
+
+export default gameEventBus;

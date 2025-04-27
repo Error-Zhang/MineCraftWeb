@@ -10,41 +10,45 @@ import {
     Vector3
 } from "@babylonjs/core";
 import {AdvancedDynamicTexture, Control, Rectangle} from "@babylonjs/gui";
-import {Assets} from "@/enums/Assets.ts";
-import EventBus from "@/game-root/utils/EventBus.ts";
-import {GameEvents} from "@/enums/GameEvents.ts";
-import {Blocks} from "@/enums/Blocks.ts";
+import {Assets} from "@/assets";
+import EventBus from "@/game-root/events/GameEventBus.ts";
+import {GameEvents} from "@/game-root/events/GameEvents.ts";
+import {Blocks} from "@/blocks/core/Blocks.ts";
 import {World} from "@/game-root/world/World.ts";
-import blockFactory from "@/game-root/utils/BlockFactory.ts";
+import blockFactory from "@/blocks/core/BlockFactory.ts";
 import AirBlock from "@/blocks/natures/AirBlock.ts";
 import {DebugHelper} from "@/game-root/utils/DebugHelper.ts";
 import {correct} from "@/game-root/utils/CalcHelper.ts";
-import GameEventManager from "@/game-root/utils/GameEventManager.ts";
+import Game from "@/game-root/events/Game.ts";
 import {CharacterController} from "./CharacterController.ts";
+import {GameMode} from "@/game-root/events/GameStore.ts";
+import {IInteractableBlock} from "@/blocks/core/BlockInterfaces.ts";
 
-export class CreativePlayer {
+export class Player {
     // 场景、相机、世界等
     scene: Scene;
-    camera: ArcRotateCamera|undefined;
+    camera: ArcRotateCamera | undefined;
     world: World;
-    gameEventManager: GameEventManager;
+    gameEventManager: Game;
     debugHelper: DebugHelper;
 
     // 玩家模型
     player: Mesh | undefined;
+    gameMode: GameMode;
 
     maxPlaceDistance = 12; // 最大方块放置距离
 
-    constructor(scene: Scene, canvas: HTMLCanvasElement, world: World) {
+    constructor(scene: Scene, canvas: HTMLCanvasElement, world: World,gameMode:GameMode) {
         this.scene = scene;
         this.world = world;
+        this.gameMode = gameMode;
         this.setupCamera(canvas);
-        this.gameEventManager = new GameEventManager(canvas);
+        this.gameEventManager = new Game(canvas);
         this.addEventListener();
         this.addCrossHair(); // 添加十字准星
-        this.loadPlayerModel(Assets.playerModel).then(()=>{
-            const cc=new CharacterController(this.player!, this.camera!, this.scene,this.gameEventManager);
-            cc.setCameraTarget(new Vector3(0,0.7,0));
+        this.loadPlayerModel(Assets.playerModel).then(() => {
+            const cc = new CharacterController(this.player!, this.camera!, this.scene, this.gameEventManager);
+            cc.setCameraTarget(new Vector3(0, 0.7, 0));
 
             cc.setNoFirstPerson(false); // 启用第一人称切换
             cc.setStepOffset(0.4);      // 可跨越的最大台阶高度
@@ -57,7 +61,7 @@ export class CreativePlayer {
         this.debugHelper.createAxisHelper();
     }
 
-    setupCamera(canvas: HTMLCanvasElement){
+    setupCamera(canvas: HTMLCanvasElement) {
         const camera = new ArcRotateCamera(
             "PlayerCamera",        // 相机名称
             Math.PI / 4,           // 初始 alpha（绕 Y轴）
@@ -83,7 +87,7 @@ export class CreativePlayer {
         // 抑制旋转惯性（去漂移）
         camera.inertia = 0.6;  // 默认为 0.9，值越小越“硬”，0则无惯性
 
-        camera.attachControl(canvas,false);
+        camera.attachControl(canvas, false);
         this.camera = camera;
     }
 
@@ -91,6 +95,13 @@ export class CreativePlayer {
     addEventListener() {
         EventBus.on(GameEvents.placeBlack, this.placeBlock.bind(this));
         EventBus.on(GameEvents.destroyBlock, this.destroyBlock.bind(this));
+        EventBus.on(GameEvents.interactWithBlock, this.interactWithBlock.bind(this));
+    }
+
+    dispose(){
+        EventBus.off(GameEvents.placeBlack, this.placeBlock.bind(this));
+        EventBus.off(GameEvents.destroyBlock, this.destroyBlock.bind(this));
+        EventBus.off(GameEvents.interactWithBlock, this.interactWithBlock.bind(this));
     }
 
     // 在屏幕中心添加一个十字形准星
@@ -160,9 +171,10 @@ export class CreativePlayer {
                     }
 
                     if (picked && picked.edgesRenderer) {
+                        // 设置边框
                         picked.edgesRenderer.isEnabled = true;
-                        picked.edgesWidth = 0.8;
-                        picked.edgesColor = new Color4(0, 0, 0, 1); // 黑色边框
+                        picked.edgesWidth = 1;
+                        picked.edgesColor = new Color4(255, 255, 255, 1);
                     }
 
                     lastHovered = picked as Mesh;
@@ -184,9 +196,23 @@ export class CreativePlayer {
 
         return null;
     }
+    // 与方块交互
+    interactWithBlock() {
+        const pick = this.getPickInfo();
+        if (!pick) return;
+
+        const pickedPos = pick.pickedPoint!;
+        const faceNormal = pick.getNormal(true);
+        if (!faceNormal) return;
+
+        const targetPos = this.getCurrentBlockPos(pickedPos, faceNormal); // 当前方块坐标
+        const block = this.world.getBlockGlobal(targetPos) as unknown as IInteractableBlock;
+        block.onInteract?.()
+    }
+
 
     // 放置方块
-    placeBlock({ blockType }: { blockType: Blocks }, callback: () => void) {
+    placeBlock({blockType}: { blockType: Blocks }, callback: () => void) {
         const pick = this.getPickInfo();
         if (!pick) return;
 

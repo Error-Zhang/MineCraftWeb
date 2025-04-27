@@ -1,14 +1,20 @@
 import React from "react";
 import Slot, {SlotType} from "../slot";
 import "./index.less";
+import {useInventorySlots} from "@/ui-root/hooks/useInventorySlots.tsx";
 
 interface InventoryGridProps {
-    slots: (SlotType | undefined)[];
+    source: string;
+    slots: SlotType[];
+    setSlots: (slots: SlotType[]) => void;
+    onDrop?: (droppedSlot: SlotType, current: number) => boolean;
+    onDropOver?: (droppedSlot: SlotType, current: number) => void;
     columns: number;
     rows: number;
 }
 
-const InventoryGrid: React.FC<InventoryGridProps> = ({slots, columns, rows}) => {
+const InventoryGrid: React.FC<InventoryGridProps> = ({source, slots, setSlots, onDrop,onDropOver, columns, rows}) => {
+    const {setDroppedIndex, onDrop:onDropDefault} = useInventorySlots(source, slots, setSlots,{overrideOnDrop:onDrop});
 
     return (
         <div
@@ -19,7 +25,19 @@ const InventoryGrid: React.FC<InventoryGridProps> = ({slots, columns, rows}) => 
             }}
         >
             {Array.from({length: columns * rows}).map((_, i) => (
-                <Slot key={i} slot={slots[i]}/>
+                <Slot
+                    key={i}
+                    slot={slots[i]}
+                    draggable
+                    allowedDropSources={["all"]}
+                    onDragStart={() => {
+                        setDroppedIndex(i)
+                    }}
+                    onDrop={(droppedSlot) => {
+                        onDropDefault(droppedSlot, i);
+                        onDropOver?.(droppedSlot, i);
+                    }}
+                />
             ))}
         </div>
     );

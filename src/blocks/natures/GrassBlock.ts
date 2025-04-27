@@ -1,8 +1,8 @@
-import {Scene, Vector3} from "@babylonjs/core";
+import {Color3, Scene, Vector3} from "@babylonjs/core";
 import {UVHelper} from "@/game-root/utils/UVHelper.ts";
-import {TextureBlock} from "@/blocks/Block.ts";
-import {BlockEntity} from "@/blocks/BlockDecorators.ts";
-import {Blocks} from "@/enums/Blocks.ts";
+import {TextureBlock} from "@/blocks/core/Block.ts";
+import {BlockEntity} from "@/blocks/core/BlockDecorators.ts";
+import {Blocks} from "@/blocks/core/Blocks.ts";
 
 @BlockEntity(Blocks.Grass)
 class GrassBlock extends TextureBlock {
@@ -12,7 +12,7 @@ class GrassBlock extends TextureBlock {
             [2, 0], // 底面：泥土
             [3, 0] // 侧面：草地侧面
         );
-        super({scene, blockType: Blocks.Grass, position, uv: uv});
+        super({scene, position, uv: uv});
     }
 }
 

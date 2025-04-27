@@ -1,6 +1,6 @@
-import {Scene, Vector2, Vector3} from "@babylonjs/core";
+import {Nullable, Scene, Vector2, Vector3} from "@babylonjs/core";
 import { Chunk, CHUNK_SIZE } from "./Chunk.ts";
-import { Block } from "@/blocks/Block.ts";
+import { Block } from "@/blocks/core/Block.ts";
 import AirBlock from "@/blocks/natures/AirBlock.ts";
 
 export class World {
@@ -30,10 +30,10 @@ export class World {
         return { chunk, localPos };
     }
 
-    getBlockGlobal(pos: Vector3, safe = false): Block {
+    getBlockGlobal(pos: Vector3, safe = false): Nullable<Block> {
         const { chunk, localPos } = this._getChunkAndLocalPos(pos);
         if (!chunk) return new AirBlock(this.scene,pos);
-        return chunk.getBlock(localPos, safe);
+        return chunk.getBlock(localPos, safe) || null;
     }
 
     setBlockGlobal(block: Block) {

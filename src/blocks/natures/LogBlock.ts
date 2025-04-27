@@ -1,8 +1,8 @@
 import {Scene, Vector3} from "@babylonjs/core";
 import {UVHelper} from "@/game-root/utils/UVHelper.ts";
-import {TextureBlock} from "@/blocks/Block.ts";
-import {BlockEntity} from "@/blocks/BlockDecorators.ts";
-import {Blocks} from "@/enums/Blocks.ts";
+import {TextureBlock} from "@/blocks/core/Block.ts";
+import {BlockEntity} from "@/blocks/core/BlockDecorators.ts";
+import {Blocks} from "@/blocks/core/Blocks.ts";
 
 @BlockEntity(Blocks.Log)
 class LogBlock extends TextureBlock {
@@ -12,7 +12,7 @@ class LogBlock extends TextureBlock {
             [5, 1], // 底面
             [4, 1] // 侧面
         );
-        super({scene, blockType: Blocks.Log, position, uv: uv});
+        super({scene, position, uv: uv});
     }
 }
 

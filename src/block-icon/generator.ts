@@ -6,8 +6,8 @@ import {
     HemisphericLight,
     Color4, Camera, Light,
 } from "@babylonjs/core";
-import { BlockIconStore } from "@/game-root/block-icon-module/store.ts";
-import {Block} from "@/blocks/Block.ts";
+import { BlockIconStore } from "@/block-icon/store.ts";
+import {Block} from "@/blocks/core/Block.ts";
 
 let engine: Engine;
 let scene: Scene;
@@ -18,7 +18,7 @@ function setupScene(): void {
     canvas = document.createElement("canvas");
     canvas.width = 128;
     canvas.height = 128;
-    engine = new Engine(canvas, true, { preserveDrawingBuffer: true });
+    engine = new Engine(canvas, false);
 
     scene = new Scene(engine);
     scene.clearColor = new Color4(0, 0, 0, 0);
