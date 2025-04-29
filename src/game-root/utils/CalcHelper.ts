@@ -1,3 +1,5 @@
+import {v4} from 'uuid';
+
 const EPSILON = 1e-6;
 
 // 修正js中浮点数存在的偏差导致的问题
@@ -10,3 +12,5 @@ export const correct = (value: number, normal: number): number => {
         return Math.floor(value); // 无需修正
     }
 };
+
+export const generateGUID = v4;

@@ -21,10 +21,10 @@ import {
     AnimationEvent,
     int
 } from "@babylonjs/core";
-import Game from "@/game-root/events/Game.ts";
+import GameListener from "@/game-root/events/GameListener.ts";
 
 export class CharacterController {
-    private gameEventManager: Game;
+    private gameEventManager: GameListener;
 
     private _avatar: Mesh = null;
     private _skeleton: Skeleton = null;
@@ -1744,7 +1744,7 @@ export class CharacterController {
      * @param faceForward
      *        是否让角色默认朝向正前方（用于设定初始朝向）
      */
-    constructor(avatar: Mesh, camera: ArcRotateCamera, scene: Scene, gameEventManager: Game, faceForward = false) {
+    constructor(avatar: Mesh, camera: ArcRotateCamera, scene: Scene, gameEventManager: GameListener, faceForward = false) {
 
         this._camera = camera;
 

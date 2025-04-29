@@ -1,0 +1,144 @@
+import React, { useContext, useEffect, useRef, useState } from "react";
+import Slot, { createEmptySlots, DroppedSlotType, SlotType } from "../../components/slot";
+import InventoryGrid from "@/ui-root/components/inventory-grid";
+import { GameContext } from "@/ui-root/GameUI.tsx";
+import { Blocks } from "@/blocks/core/Blocks.ts";
+import { matchesPattern } from "@/ui-root/views/craft-table/match.ts";
+import { useInventorySlots } from "@/ui-root/components/inventory-grid/useInventorySlots.tsx";
+import { BlockRecipe } from "@/blocks/core/BlockTypes.ts";
+import "./index.less";
+import gameStore from "@/game-root/events/GameStore.ts";
+
+interface CraftingPanelProps {
+	title?: string;
+	guid: string;
+	rows: number;
+	columns: number;
+	recipes: Record<Blocks, BlockRecipe[]>;
+}
+
+const CraftingPanel: React.FC<CraftingPanelProps> = ({ title, guid, rows, columns, recipes }) => {
+	const { blockIconMap } = useContext(GameContext);
+	const [gridSlots, setGridSlots] = useState<SlotType[]>(createEmptySlots(rows * columns));
+	const [resultSlot, setResultSlot] = useState<SlotType[]>(createEmptySlots(1));
+	const dropFinish = useRef(false);
+
+	// 加载数据
+	useEffect(() => {
+		const result = gameStore.getInteractBlocksStore(guid);
+		if (result) {
+			const { gridSlots, resultSlot } = result;
+			setGridSlots(gridSlots);
+			setResultSlot(resultSlot);
+		} else {
+			setGridSlots(createEmptySlots(rows * columns));
+			setResultSlot(createEmptySlots(1));
+		}
+	}, [guid]);
+
+	// 保存数据
+	useEffect(() => {
+		return () => {
+			gameStore.setInteractBlocksStore(guid, { gridSlots, resultSlot });
+		};
+	}, [guid, gridSlots, resultSlot]); // 添加所有变化的状态作为依赖
+
+	function reshape<T>(array: T[]): T[][] {
+		const result: T[][] = [];
+		for (let i = 0; i < array.length; i += columns) {
+			result.push(array.slice(i, i + columns));
+		}
+		return result;
+	}
+
+	const updateResultSlot = () => {
+		const result = Object.entries(recipes)
+			.flatMap(([block, recipeList]) => {
+				return recipeList.map(recipe => ({
+					block: block as Blocks,
+					recipe,
+				}));
+			})
+			.find(({ recipe }) =>
+				matchesPattern(reshape(gridSlots.map(item => (item ? item.key : null))), recipe)
+			);
+
+		if (result) {
+			const output = result.recipe.output;
+			setResultSlot([
+				{
+					key: output.item,
+					value: output.count,
+					icon: blockIconMap[output.item],
+					source: "CraftTableResult",
+				},
+			]);
+		} else {
+			setResultSlot([null]);
+		}
+	};
+
+	const updateTable = () => {
+		if (dropFinish.current) {
+			dropFinish.current = false;
+			return;
+		}
+
+		gridSlots.forEach((slot: SlotType) => {
+			slot && slot.value--;
+		});
+		setGridSlots([...gridSlots]);
+	};
+
+	useEffect(() => {
+		// 让其在最后执行，防止逻辑碰撞导致的不确定性
+		setTimeout(() => {
+			updateResultSlot();
+		}, 0);
+	}, [gridSlots]);
+
+	const onDropTable = (droppedSlot: DroppedSlotType, current: number) => {
+		if (droppedSlot?.source === "CraftTableResult") {
+			if (gridSlots[current] && gridSlots[current].value - 1 > 0) return true;
+			gridSlots.forEach((slot: SlotType) => {
+				slot && slot.value--;
+			});
+			gridSlots[current] = { ...droppedSlot, source: "CraftTable" }; // 最好不要忘记换源
+			dropFinish.current = true;
+			return true;
+		}
+		return false;
+	};
+
+	const { setDroppedIndex, onDrop: onDropResult } = useInventorySlots(
+		"CraftTableResult",
+		resultSlot,
+		setResultSlot,
+		{ onDropOver: updateTable }
+	);
+
+	return (
+		<div className="crafting-panel">
+			<span className="panel-title">{title}</span>
+			<div className="crafting">
+				<InventoryGrid
+					source="CraftTable"
+					slots={gridSlots}
+					setSlots={setGridSlots}
+					onDrop={onDropTable}
+					columns={columns}
+					rows={rows}
+				/>
+				<div className="crafting-arrow">→</div>
+				<Slot
+					slot={resultSlot[0]}
+					draggable
+					onDragStart={() => setDroppedIndex(0)}
+					onDrop={droppedSlot => onDropResult(droppedSlot, 0)}
+				/>
+			</div>
+		</div>
+	);
+};
+
+export default CraftingPanel;

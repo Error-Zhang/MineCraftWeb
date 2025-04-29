@@ -1,20 +1,23 @@
 @import "@/styles/variables";
+
 .slot {
   width: @slot-size;
   height: @slot-size;
   border-width: 2px;
   border-style: solid;
-  border-image: linear-gradient(
-          to bottom right,
-          black 0% 50%,
-          white 50% 100%
-  ) 1;
-  background: @color-bg-panel;
+  border-image: linear-gradient(to bottom right,
+  black 0% 50%,
+  white 50% 100%) 1;
+  background: transparent;
   display: flex;
   justify-content: center;
   align-items: center;
   position: relative;
   image-rendering: pixelated; // 模拟像素风格图标
+}
+
+.slot-hotbar {
+  border-image: none;
 }
 
 .slot-icon {
@@ -30,6 +33,12 @@
   box-sizing: content-box;
 }
 
+.slot.splitting {
+  border-image: none;
+  border-color: red;
+  border-width: 0.1em;
+}
+
 .slot-number {
   position: absolute;
   bottom: 2px;
@@ -38,4 +47,18 @@
   font-size: 1em;
   font-weight: bold;
   line-height: 1;
+}
+
+.hand-slot {
+  position: relative;
+  top: 0;
+  left: 0;
+  transform: translate(-70%, -70%);
+
+  img {
+    width: @slot-size;
+    height: @slot-size;
+    pointer-events: none;
+  }
+
 }
