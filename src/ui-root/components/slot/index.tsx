@@ -78,7 +78,7 @@ const Slot: React.FC<SlotProps> = ({
 
 	return (
 		<div
-			title={slot?.key}
+			title=""
 			style={{ cursor: slot ? "grab" : "auto" }}
 			className={`slot ${selected ? "selected" : ""} ${isActive ? "splitting" : ""} ${className}`}
 			onClick={handleClick}

@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import GameListener from "@/game-root/events/GameListener.ts";
+import GameWindow from "@/game-root/events/GameWindow.ts";
 import { gameEventBus } from "@/game-root/events/GameEventBus.ts";
 import { GameEvents } from "@/game-root/events/GameEvents.ts";
 
@@ -14,7 +14,7 @@ type KeyBinding = string | string[];
  * @param onEscape
  */
 export function useToggle(
-	game: GameListener,
+	game: GameWindow,
 	keys: KeyBinding,
 	onToggle: () => void,
 	qkeys: KeyBinding,
@@ -46,7 +46,7 @@ export function useToggle(
 }
 
 export function useToggleActive(
-	game: GameListener,
+	game: GameWindow,
 	setIsActive: React.Dispatch<React.SetStateAction<boolean>>,
 	keys: KeyBinding,
 	onClose?: () => void

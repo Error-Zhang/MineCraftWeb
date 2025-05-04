@@ -4,31 +4,43 @@ import { HandSlotController } from "@/ui-root/components/slot/HandSlotManager.ts
 
 type GameEventHandler = (...args: any) => void;
 
-class GameListener {
+class GameWindow {
+	private static instance: GameWindow | null = null;
+
 	private active = false;
 	private canvas: HTMLCanvasElement;
-
-	// type -> Map<originalHandler, wrappedHandler>
 	private listeners: Map<string, Map<GameEventHandler, EventListener>> = new Map();
 
-	constructor(canvas: HTMLCanvasElement) {
+	private constructor(canvas: HTMLCanvasElement) {
 		this.canvas = canvas;
+
 		canvas.onclick = () => {
 			if (!this.active) {
 				this.togglePointerLock();
 			}
 		};
+
 		document.addEventListener("pointerlockchange", this.onPointerLockChange);
 	}
 
-	get isInGame(): boolean {
+	public get isInGame(): boolean {
 		return this.active;
+	}
+
+	/**
+	 * 获取单例实例，若未初始化则创建
+	 */
+	public static getInstance(canvas: HTMLCanvasElement): GameWindow {
+		if (!GameWindow.instance) {
+			GameWindow.instance = new GameWindow(canvas);
+		}
+		return GameWindow.instance;
 	}
 
 	/**
 	 * 切换 Pointer Lock 状态
 	 */
-	togglePointerLock() {
+	public togglePointerLock() {
 		if (document.pointerLockElement === this.canvas) {
 			document.exitPointerLock();
 		} else {
@@ -38,25 +50,22 @@ class GameListener {
 		}
 	}
 
-	addEventListener(type: string, handler: GameEventHandler) {
+	public addEventListener(type: string, handler: GameEventHandler) {
 		const wrapped: EventListener = (event: Event) => {
 			if (this.active) {
 				handler(event);
 			}
 		};
 
-		// 初始化映射结构
 		if (!this.listeners.has(type)) {
 			this.listeners.set(type, new Map());
 		}
 
-		// 存入映射表
 		this.listeners.get(type)!.set(handler, wrapped);
-
 		window.addEventListener(type, wrapped);
 	}
 
-	removeEventListener(type: string, handler: GameEventHandler) {
+	public removeEventListener(type: string, handler: GameEventHandler) {
 		const typeMap = this.listeners.get(type);
 		if (!typeMap) return;
 
@@ -66,13 +75,12 @@ class GameListener {
 		window.removeEventListener(type, wrapped);
 		typeMap.delete(handler);
 
-		// 清理空的 type 映射
 		if (typeMap.size === 0) {
 			this.listeners.delete(type);
 		}
 	}
 
-	destroy() {
+	public destroy() {
 		for (const [type, handlerMap] of this.listeners.entries()) {
 			for (const wrapped of handlerMap.values()) {
 				window.removeEventListener(type, wrapped);
@@ -80,6 +88,7 @@ class GameListener {
 		}
 		this.listeners.clear();
 		document.removeEventListener("pointerlockchange", this.onPointerLockChange);
+		GameWindow.instance = null;
 	}
 
 	private onPointerLockChange = () => {
@@ -87,4 +96,4 @@ class GameListener {
 	};
 }
 
-export default GameListener;
+export default GameWindow;

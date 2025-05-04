@@ -7,8 +7,7 @@ import React, {
 	useState,
 } from "react";
 import { generateAllBlockIcons } from "@/block-icon/generator.ts";
-import GameListener from "@/game-root/events/GameListener.ts";
-import GameStore, { GameMode } from "@/game-root/events/GameStore.ts";
+import GameWindow from "@/game-root/events/GameWindow.ts";
 import { BlockIconStore } from "@/block-icon/store.ts";
 import blockFactory from "@/blocks/core/BlockFactory.ts";
 
@@ -19,9 +18,9 @@ import { HandSlotManager } from "@/ui-root/components/slot/HandSlotManager.tsx";
 import Bag from "@/ui-root/views/bag";
 
 export interface GameProps {
-	game: GameListener;
+	game: GameWindow;
 	blockIconMap: Record<string, string>;
-	gameMode: GameMode;
+	gameMode: string;
 }
 
 export const GameContext = createContext<GameProps>({} as GameProps);
@@ -29,22 +28,14 @@ export const GameContext = createContext<GameProps>({} as GameProps);
 const GameUI: React.FC<{ canvasRef: RefObject<HTMLCanvasElement> }> = ({ canvasRef }) => {
 	const [isRender, setIsRender] = useState(false);
 	const blockIconMap = useRef<Record<string, string>>();
-	const game = useRef<GameListener>();
-	const gameMode = useRef<GameMode>();
+	const game = useRef<GameWindow>();
+	const gameMode = useRef<string>("creative");
 
 	useLayoutEffect(() => {
-		const callback = () => (gameMode.current = GameStore.get("gameMode")!);
-		GameStore.on("gameMode", callback);
-		game.current = new GameListener(canvasRef.current!);
-
+		game.current = GameWindow.getInstance(canvasRef.current!);
 		return () => {
-			GameStore.off("gameMode", callback);
 			game.current?.destroy();
 		};
-	}, []);
-
-	useEffect(() => {
-		GameStore.set("gameMode", "creative");
 	}, []);
 
 	useEffect(() => {

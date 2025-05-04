@@ -1,7 +1,7 @@
 import { Dispatch, SetStateAction, useEffect } from "react";
 import { GameEvents } from "@/game-root/events/GameEvents";
 import { GameMode } from "@/game-root/events/GameStore";
-import GameListener from "@/game-root/events/GameListener.ts";
+import GameWindow from "@/game-root/events/GameWindow.ts";
 import { SlotType } from "@/ui-root/components/slot";
 import useLongPress from "@/ui-root/views/hotbar/useLongPress.tsx";
 import { gameEventBus } from "@/game-root/events/GameEventBus.ts";
@@ -11,7 +11,7 @@ interface UseGameControlsOptions {
 	setSlots: Dispatch<SetStateAction<SlotType[]>>;
 	selectedIndex: number;
 	setSelectedIndex: Dispatch<SetStateAction<number>>;
-	game: GameListener;
+	game: GameWindow;
 	gameMode: GameMode;
 }
 
@@ -83,8 +83,8 @@ export function useGameControls({
 		onLongPress: () => {
 			gameEventBus.emit(GameEvents.destroyBlock);
 		},
-		delay: 300,
-		interval: 300,
+		delay: 200, // 控制下次触发间隔
+		interval: 200, // 控制点击时间
 		button: 0, // 左键
 		enabled: true,
 	});

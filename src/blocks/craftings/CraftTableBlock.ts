@@ -8,7 +8,7 @@ import { GameEvents } from "@/game-root/events/GameEvents.ts";
 import { gameEventBus } from "@/game-root/events/GameEventBus.ts";
 import { BlockRecipe } from "@/blocks/core/BlockTypes.ts";
 import { getBlockModel } from "@/assets";
-import { generateGUID } from "@/game-root/utils/CalcHelper.ts";
+import MathUtils from "@/game-root/utils/MathUtils.ts";
 
 @BlockEntity(Blocks.CraftTable)
 class CraftTableBlock extends ModelBlock implements IInteractableBlock {
@@ -16,8 +16,8 @@ class CraftTableBlock extends ModelBlock implements IInteractableBlock {
 	readonly guid: string;
 
 	constructor(scene: Scene, position: Vector3) {
-		super({ scene, position, isTransparent: true }, getBlockModel("CraftTable"));
-		this.guid = generateGUID();
+		super({ scene, position }, getBlockModel("CraftTable"));
+		this.guid = MathUtils.generateGUID();
 	}
 
 	static override *getRecipes(): Generator<BlockRecipe> {

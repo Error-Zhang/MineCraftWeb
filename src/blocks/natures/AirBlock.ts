@@ -1,21 +1,20 @@
-import {Block} from "@/blocks/core/Block.ts";
-import {Scene, Vector3} from "@babylonjs/core";
-import {Blocks} from "@/blocks/core/Blocks.ts";
+import { Block } from "@/blocks/core/Block.ts";
+import { Blocks } from "@/blocks/core/Blocks.ts";
+import { Faces } from "../core/BlockMeshBuilder";
 
 class AirBlock extends Block {
-    static __blockType = Blocks.Air;
-    constructor(scene: Scene, position: Vector3) {
-        super({scene, position, isTransparent: true});
-    }
+	static override __blockType = Blocks.Air;
+	static override __isTransparent = true;
 
-    override render(): void {
-    }
+	tryRender(faces?: Faces): void {}
 
-    override renderIcon(): void {
-    }
+	setActive(active: boolean): void {}
 
-    override dispose(): void {
-    }
+	override render(): void {}
+
+	override renderIcon(): void {}
+
+	override dispose(): void {}
 }
 
 export default AirBlock;

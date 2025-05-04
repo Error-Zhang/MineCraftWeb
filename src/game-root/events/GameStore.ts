@@ -1,7 +1,4 @@
-export type GameMode = "creative" | "survival";
-
 type GameStoreValue = {
-	gameMode: GameMode;
 	interactBlocksStore: Map<any, any>;
 	isSplitting: boolean;
 	// 可以扩展更多字段
@@ -14,7 +11,6 @@ type Listener<K extends GameStoreKey> = (newValue: GameStoreValue[K]) => void;
 class GameStore {
 	/** 默认值，用于判断类型（Map 还是普通类型） */
 	private static defaultValues: GameStoreValue = {
-		gameMode: "creative",
 		interactBlocksStore: new Map<any, any>(),
 		isSplitting: false,
 	};

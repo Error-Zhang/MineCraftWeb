@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
-import GameListener from "@/game-root/events/GameListener.ts";
+import GameWindow from "@/game-root/events/GameWindow.ts";
 
 interface UseLongPressOptions {
-	game: GameListener;
+	game: GameWindow;
 	onLongPress: () => void;
 	delay?: number; // 触发长按的延迟，默认 300ms
 	interval?: number; // 长按之后持续触发的间隔，默认 100ms

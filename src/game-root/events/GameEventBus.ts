@@ -5,6 +5,7 @@ type EventCallback = (...args: any[]) => void;
 class GameEventBus {
 	private static _instance: GameEventBus;
 	private events: Map<GameEvents | string, EventCallback[]> = new Map();
+	private _debounceTimers: Map<GameEvents | string, number> = new Map();
 
 	public constructor() {}
 

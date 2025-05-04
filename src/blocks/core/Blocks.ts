@@ -1,12 +1,14 @@
 export enum Blocks {
-	Air = "", // 不要修改Air的值，因为代码中为省事做的是判空，其他值可以修改
-	Grass = "草方块",
-	Dirt = "泥土",
-	Stone = "原石",
-	Board = "木板",
-	Log = "原木",
-	Leaves = "树叶",
-	CraftTable = "工作台",
+	Air, // 不要修改Air的顺序，因为代码中为省事做的是布尔判断，其他可以修改
+	Water,
+	Grass,
+	Dirt,
+	Stone,
+	Sand,
+	Board,
+	Log,
+	Leaves,
+	CraftTable,
 }
 
 export function getBlocksKey(value: Blocks): string {

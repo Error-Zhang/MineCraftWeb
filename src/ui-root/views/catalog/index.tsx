@@ -13,7 +13,7 @@ const Catalog: React.FC = () => {
 	useEffect(() => {
 		const items = blockFactory.getAllRegisterBlocks().map(blockType => ({
 			key: blockType,
-			value: blockFactory.getBlockClass(blockType).maxCount,
+			value: blockFactory.getBlockClass(blockType)?.maxCount || 0,
 			icon: blockIconMap[blockType],
 			source: "Catalog",
 		}));
