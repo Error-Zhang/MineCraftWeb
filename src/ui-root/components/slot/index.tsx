@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from "react";
 import "./index.less";
-import { Blocks } from "@/blocks/core/Blocks.ts";
 import { Nullable } from "@babylonjs/core";
 import { HandSlotController } from "@/ui-root/components/slot/HandSlotManager.tsx";
 import gameStore from "@/game-root/events/GameStore.ts";
+import blockApi from "@/api/blockApi.ts";
+import BlockType from "@/block-design/definitions/BlockType.ts";
+import blockFactory from "@/block-design/core/BlockFactory.ts";
 
 export type SlotType = Nullable<{
-	key: Blocks;
+	key: BlockType;
 	value: number;
-	icon: string;
 	source: string; // 如 "catalog" | "hotbar"
 }>;
 
@@ -41,7 +42,7 @@ const Slot: React.FC<SlotProps> = ({
 	showCount = true,
 }) => {
 	const [isActive, setIsActive] = useState(false);
-
+	const [imgError, setImgError] = useState(false);
 	useEffect(() => {
 		const cb = (value: boolean) => setIsActive(value);
 		gameStore.on("isSplitting", cb);
@@ -78,13 +79,22 @@ const Slot: React.FC<SlotProps> = ({
 
 	return (
 		<div
-			title=""
+			title={slot ? blockFactory.getBlockByType(slot.key)?.definition.displayName : ""}
 			style={{ cursor: slot ? "grab" : "auto" }}
 			className={`slot ${selected ? "selected" : ""} ${isActive ? "splitting" : ""} ${className}`}
 			onClick={handleClick}
 			onContextMenu={handleRightClick} // 加上右键处理
 		>
-			{slot?.icon && <img className="slot-icon" src={slot.icon} alt="item" />}
+			{slot && !imgError ? (
+				<img
+					className="slot-icon"
+					src={blockApi.getBlockIconUrl(slot.key)}
+					alt={slot.key}
+					onError={() => setImgError(true)}
+				/>
+			) : (
+				slot && <span className="slot-fallback-text">{slot.key}</span>
+			)}
 			{showCount && slot && slot.value > 1 && <span className="slot-number">{slot.value}</span>}
 		</div>
 	);

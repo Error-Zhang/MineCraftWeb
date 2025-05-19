@@ -122,7 +122,7 @@ class WorldSetting {
 	init(values: any) {
 		this.name = values.WorldName || "";
 		this.originalSerializationVersion = values.OriginalSerializationVersion || "";
-		this.seed = values.WorldSeed || 4566788;
+		this.seed = values.WorldSeed || 49;
 		this.gameMode = values.GameMode || GameMode.Creative;
 		this.environmentBehaviorMode = values.EnvironmentBehaviorMode || EnvironmentBehaviorMode.Living;
 		this.timeOfDayMode = values.TimeOfDayMode || TimeOfDayMode.Changing;

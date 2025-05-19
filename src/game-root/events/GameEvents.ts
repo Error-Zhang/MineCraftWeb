@@ -1,6 +1,9 @@
 import { Blocks } from "@/blocks/core/Blocks.ts";
 
 export enum GameEvents {
+	startGame,
+	leaveGame,
+	pauseGame,
 	hiddenPanel,
 	playerMove,
 	placeBlack,

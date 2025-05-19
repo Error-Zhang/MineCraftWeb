@@ -4,6 +4,7 @@ import GameWindow from "@/game-root/events/GameWindow.ts";
 import { gameEventBus } from "@/game-root/events/GameEventBus.ts";
 import { GameEvents } from "@/game-root/events/GameEvents.ts";
 import { Position } from "@/game-root/world/Chunk.ts";
+import { throttle } from "@/game-root/utils/lodash.ts";
 
 export class PlayerCamera {
 	readonly speed: number = 0.1;
@@ -26,6 +27,9 @@ export class PlayerCamera {
 		up: false,
 		down: false,
 	};
+	private emitPlayerMove = throttle(() => {
+		gameEventBus.emit(GameEvents.playerMove, { location: this.camera.position });
+	}, 1000);
 
 	constructor(scene: Scene, canvas: HTMLCanvasElement, option: GameOption) {
 		this.option = option;
@@ -41,10 +45,15 @@ export class PlayerCamera {
 		this.camera.applyGravity = true;
 		this.camera.inertia = 0.6; // 禁用旋转惯性
 		this.camera.speed = 0.6;
-		this.camera.setTarget(Vector3.Zero());
+		this.camera.setTarget(new Vector3(0, this.vector.y, 0));
 		this.camera.attachControl(canvas, true);
 		this.bindInput(GameWindow.getInstance(canvas));
-		this.scene.onBeforeRenderObservable.add(() => this.update());
+		this.scene.onBeforeRenderObservable.add(() => {
+			this.update();
+			if (Object.values(this.moveFlags).find(flag => flag)) {
+				this.emitPlayerMove();
+			}
+		});
 	}
 
 	// 射线拾取选中的方块信息，排除玩家自身碰撞体
@@ -77,9 +86,10 @@ export class PlayerCamera {
 		if (this.moveFlags.right) this.moveRight();
 		if (this.moveFlags.up) this.moveUp();
 		if (this.moveFlags.down) this.moveDown();
-		if (Object.values(this.moveFlags).find(flag => flag)) {
-			gameEventBus.emit(GameEvents.playerMove, { location: this.camera.position });
-		}
+		this.handleJump();
+	}
+
+	private handleJump() {
 		if (this.isJumpStart) {
 			if (this.moveValue.y + this.eachJumpY < this.maxJumpY && !this.isJumpFall) {
 				// 跳跃开始，上升

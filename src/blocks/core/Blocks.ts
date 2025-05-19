@@ -3,8 +3,10 @@ export enum Blocks {
 	Water,
 	Grass,
 	Dirt,
-	Stone,
+	GraniteStone, // 花岗岩
+	BasaltStone, // 玄武岩
 	Sand,
+	SandStone,
 	Board,
 	Log,
 	Leaves,

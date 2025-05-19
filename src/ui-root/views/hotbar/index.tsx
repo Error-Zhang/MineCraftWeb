@@ -6,14 +6,13 @@ import { useInventorySlots } from "@/ui-root/components/inventory-grid/useInvent
 import { HOTBAR_SIZE, useGameControls } from "@/ui-root/views/hotbar/useGameControls.tsx";
 
 const HotBar: React.FC = () => {
-	const { game, gameMode, blockIconMap } = useContext(GameContext);
+	const { game } = useContext(GameContext);
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [slots, setSlots] = useState<SlotType[]>(createEmptySlots(HOTBAR_SIZE));
 
 	// 直接一行搞定所有监听！
 	useGameControls({
 		game,
-		gameMode,
 		slots,
 		setSlots,
 		selectedIndex,

@@ -83,13 +83,11 @@ export class BlockMaterialManager {
 		texture: Texture
 	) {
 		const material = new StandardMaterial(materialKey, scene);
-
-		material.diffuseTexture = texture;
+		const waterTexture = texture;
+		material.diffuseTexture = waterTexture;
 		material.diffuseColor = color;
 		material.alpha = 0.5; // 半透明
 		material.specularColor = new Color3(0.1, 0.1, 0.3); // 柔和的高光，像水的反光
-
-		material.diffuseTexture.hasAlpha = true;
 
 		return material;
 	}

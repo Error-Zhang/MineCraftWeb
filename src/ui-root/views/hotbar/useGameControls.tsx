@@ -1,6 +1,6 @@
 import { Dispatch, SetStateAction, useEffect } from "react";
 import { GameEvents } from "@/game-root/events/GameEvents";
-import { GameMode } from "@/game-root/events/GameStore";
+import GameStore from "@/game-root/events/GameStore";
 import GameWindow from "@/game-root/events/GameWindow.ts";
 import { SlotType } from "@/ui-root/components/slot";
 import useLongPress from "@/ui-root/views/hotbar/useLongPress.tsx";
@@ -12,7 +12,6 @@ interface UseGameControlsOptions {
 	selectedIndex: number;
 	setSelectedIndex: Dispatch<SetStateAction<number>>;
 	game: GameWindow;
-	gameMode: GameMode;
 }
 
 export const HOTBAR_SIZE = 9;
@@ -23,7 +22,6 @@ export function useGameControls({
 	setSlots,
 	selectedIndex,
 	setSelectedIndex,
-	gameMode,
 }: UseGameControlsOptions) {
 	// 键盘快捷键（1-9）
 	useEffect(() => {
@@ -54,7 +52,7 @@ export function useGameControls({
 				const slot = slots[selectedIndex];
 				if (slot && slot.value > 0) {
 					gameEventBus.emit(GameEvents.placeBlack, { blockType: slot.key }, () => {
-						if (gameMode !== "creative") {
+						if (GameStore.get("worldInfo")?.gameMode !== 0) {
 							--slot.value;
 						}
 						setSlots([...slots]);
@@ -64,7 +62,7 @@ export function useGameControls({
 		};
 		game.addEventListener("pointerdown", handlePointerDown);
 		return () => game.removeEventListener("pointerdown", handlePointerDown);
-	}, [game, slots, selectedIndex, setSlots, gameMode]);
+	}, [game, slots, selectedIndex, setSlots]);
 
 	// 键盘 F 键交互
 	useEffect(() => {

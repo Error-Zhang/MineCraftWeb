@@ -1,12 +1,21 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 
-// https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
-  resolve: {
-    alias: {
-      "@": "/src", // 设置@指向src文件夹
-    },
-  },
-})
+	plugins: [react()],
+	resolve: {
+		alias: {
+			"@": "/src", // 设置@指向src文件夹
+		},
+	},
+	/*server: {
+		proxy: {
+			// 代理 API 请求
+			"/api": {
+				target: "http://localhost:5110/api", // 后端服务地址
+				changeOrigin: true,
+				rewrite: path => path.replace(/^\/api/, ""),
+			},
+		},
+	},*/
+});

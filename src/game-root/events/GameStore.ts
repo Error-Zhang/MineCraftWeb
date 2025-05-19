@@ -1,7 +1,14 @@
 type GameStoreValue = {
-	interactBlocksStore: Map<any, any>;
 	isSplitting: boolean;
-	// 可以扩展更多字段
+	worldInfo?: {
+		worldId: number;
+		playerId: number;
+		gameMode: number;
+	};
+	userInfo?: {
+		id: number;
+		name: string;
+	};
 };
 
 type GameStoreKey = keyof GameStoreValue;
@@ -11,12 +18,11 @@ type Listener<K extends GameStoreKey> = (newValue: GameStoreValue[K]) => void;
 class GameStore {
 	/** 默认值，用于判断类型（Map 还是普通类型） */
 	private static defaultValues: GameStoreValue = {
-		interactBlocksStore: new Map<any, any>(),
 		isSplitting: false,
 	};
 
 	/** 需要持久化存储到 sessionStorage 的字段 */
-	private static persistKeys: GameStoreKey[] = ["interactBlocksStore"];
+	private static persistKeys: GameStoreKey[] = ["userInfo"];
 
 	/** 内存存储 */
 	private static memoryStore: Partial<GameStoreValue> = {};
@@ -29,16 +35,9 @@ class GameStore {
 		if (this.persistKeys.includes(key)) {
 			const raw = sessionStorage.getItem(key);
 			if (raw) {
-				const parsed = JSON.parse(raw);
-				const defaultValue = this.defaultValues[key];
-
-				if (defaultValue instanceof Map) {
-					return new Map(parsed) as GameStoreValue[K];
-				}
-				return parsed;
+				return JSON.parse(raw);
 			}
 		}
-
 		// 从内存读取
 		if (key in this.memoryStore) {
 			return this.memoryStore[key] as GameStoreValue[K];
@@ -55,11 +54,7 @@ class GameStore {
 			try {
 				let serialized: string;
 
-				if (value instanceof Map) {
-					serialized = JSON.stringify(Array.from(value.entries()));
-				} else {
-					serialized = JSON.stringify(value);
-				}
+				serialized = JSON.stringify(value);
 
 				sessionStorage.setItem(key, serialized);
 			} catch (e) {
@@ -73,16 +68,12 @@ class GameStore {
 		this.notify(key, value);
 	}
 
-	/** 单独操作 interactBlocksStore 的便捷方法 */
-	static getInteractBlocksStore(guid: string) {
-		const store = this.get("interactBlocksStore");
-		return store.get(guid);
-	}
-
-	static setInteractBlocksStore(guid: string, data: any) {
-		const store = this.get("interactBlocksStore");
-		store.set(guid, data);
-		this.set("interactBlocksStore", store);
+	static remove<K extends GameStoreKey>(key: K) {
+		if (this.persistKeys.includes(key)) {
+			sessionStorage.removeItem(key);
+		} else {
+			delete this.memoryStore[key];
+		}
 	}
 
 	static on<K extends GameStoreKey>(key: K, callback: Listener<K>) {

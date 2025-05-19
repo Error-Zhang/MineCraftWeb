@@ -9,6 +9,7 @@ import { Remote } from "comlink";
 import { GameOption } from "@/game-root/Game.ts";
 import WorldSetting from "@/game-root/world/WorldSetting.ts";
 import { Grid3D } from "@/game-root/noise/Grid.ts";
+import { sleep } from "@/game-root/utils/lodash.ts";
 
 class WorldGenerator {
 	private readonly scene: Scene;
@@ -18,10 +19,16 @@ class WorldGenerator {
 
 	private radius: number;
 	private isUpdating = false;
+	private center: Position;
 
 	constructor(scene: Scene, options: GameOption) {
 		this.scene = scene;
 		this.radius = Math.ceil(options.visualField / CHUNK_SIZE);
+		this.center = {
+			x: Math.floor(options.start.x / CHUNK_SIZE),
+			y: 0,
+			z: Math.floor(options.start.z / CHUNK_SIZE),
+		};
 		const worldSetting = new WorldSetting();
 		// 创建并初始化worker
 		this.noiseWorkerReady = createNoiseWorker(worldSetting).then(worker => {
@@ -38,14 +45,14 @@ class WorldGenerator {
 		const chunkCoords: { cx: number; cz: number }[] = [];
 		for (let cx = -radius; cx < radius; cx++) {
 			for (let cz = -radius; cz < radius; cz++) {
-				chunkCoords.push({ cx, cz });
+				chunkCoords.push({ cx: this.center.x + cx, cz: this.center.z + cz });
 			}
 		}
 
 		await Promise.all(
 			chunkCoords.map(({ cx, cz }) => {
 				const pos = { x: cx, y: 0, z: cz };
-				return this.generateChunk(world, cx, cz, pos);
+				return this.generateChunk(world, pos);
 			})
 		);
 
@@ -54,14 +61,18 @@ class WorldGenerator {
 		return world;
 	}
 
-	public async updateWorldAround(position: Position, world: World, chunksPerFrame = 3) {
-		if (this.isUpdating) return; // 正在执行，跳过这次
+	// 调用的位置加防抖
+	public async updateWorldAround(
+		position: Position,
+		world: World,
+		chunksPerFrame = 2,
+		frameTime: number = 200
+	) {
+		if (this.isUpdating) return;
 		if (!world.hasChunkChanged(position)) return;
 
 		this.isUpdating = true;
-
 		const loadRadius = Math.max(Math.floor(this.radius / 2), 2);
-		const unloadRadius = this.radius;
 
 		const playerChunkPos = {
 			x: Math.floor(position.x / CHUNK_SIZE),
@@ -72,8 +83,8 @@ class WorldGenerator {
 		const loadQueue: { x: number; z: number }[] = [];
 		for (let dx = -loadRadius; dx <= loadRadius; dx++) {
 			for (let dz = -loadRadius; dz <= loadRadius; dz++) {
-				const cx = playerChunkPos.x + dx;
-				const cz = playerChunkPos.z + dz;
+				const cx = playerChunkPos.x + dx; // 根据中心坐标偏移
+				const cz = playerChunkPos.z + dz; // 根据中心坐标偏移
 				const pos = { x: cx, y: 0, z: cz };
 				if (!world.getChunk(pos)) {
 					loadQueue.push({ x: cx, z: cz });
@@ -84,6 +95,7 @@ class WorldGenerator {
 		}
 
 		let index = 0;
+		let finished = 0;
 
 		const step = async () => {
 			let count = 0;
@@ -91,33 +103,45 @@ class WorldGenerator {
 				const { x, z } = loadQueue[index];
 				const pos = { x, y: 0, z };
 
-				const chunk = await this.generateChunk(world, x, z, pos);
-				chunk.render();
-
+				this.generateChunk(world, pos).then(chunk => {
+					chunk.render();
+					finished++;
+					if (finished === loadQueue.length) {
+						this.unloadWorldChunk(world, playerChunkPos);
+						this.isUpdating = false;
+						console.log(`[updateWorldAround]: Updated ${finished} Chunks`);
+					}
+				});
+				// 通过显示等待，来降低cpu在同一时刻的并发量，防止掉帧
+				await sleep(frameTime);
 				index++;
 				count++;
 			}
-
 			if (index < loadQueue.length) {
 				requestAnimationFrame(step);
-			} else {
-				// 卸载超出范围的区块
-				const allChunks = world.getChunkList();
-				for (const chunk of allChunks) {
-					const dx = chunk.chunkPos.x - playerChunkPos.x;
-					const dz = chunk.chunkPos.z - playerChunkPos.z;
-					const dist = Math.max(Math.abs(dx), Math.abs(dz));
-					if (dist > unloadRadius) {
-						world.unloadChunk(chunk.chunkPos);
-						//world.activeChunk(chunk.chunkPos, false);
-					}
-				}
-
-				this.isUpdating = false; // 释放锁
 			}
 		};
+		if (!loadQueue.length) {
+			// 如果没有任务直接释放锁
+			this.isUpdating = false;
+		} else {
+			console.log("[updateWorldAround]: Updating");
+			requestAnimationFrame(step);
+		}
+	}
 
-		requestAnimationFrame(step);
+	unloadWorldChunk(world: World, playerChunkPos: Position) {
+		const unloadRadius = this.radius;
+		// 卸载超出范围的区块
+		const allChunks = world.getChunkList();
+		for (const chunk of allChunks) {
+			const dx = chunk.chunkPos.x - playerChunkPos.x;
+			const dz = chunk.chunkPos.z - playerChunkPos.z;
+			const dist = Math.max(Math.abs(dx), Math.abs(dz));
+			if (dist > unloadRadius) {
+				world.unloadChunk(chunk.chunkPos);
+			}
+		}
 	}
 
 	public async generateWorld(): Promise<World> {
@@ -127,7 +151,7 @@ class WorldGenerator {
 		for (let cx = -radius; cx < radius; cx++) {
 			for (let cz = -radius; cz < radius; cz++) {
 				const pos = { x: cx, y: 0, z: cz };
-				const chunk = await this.generateChunk(world, cx, cz, pos);
+				const chunk = await this.generateChunk(world, pos);
 				chunk.render();
 			}
 		}
@@ -155,12 +179,12 @@ class WorldGenerator {
 		return world;
 	}
 
-	private async generateChunk(world: World, cx: number, cz: number, chunkPos: Position) {
+	private async generateChunk(world: World, chunkPos: Position) {
 		await this.noiseWorkerReady;
 		const chunk = new Chunk(chunkPos, world);
 		const { climateData, blockGrid, surfaceBlocks } = await this.noiseWorker!.generateTerrain(
-			cx * CHUNK_SIZE,
-			cz * CHUNK_SIZE,
+			chunkPos.x * CHUNK_SIZE,
+			chunkPos.z * CHUNK_SIZE,
 			CHUNK_SIZE,
 			CHUNK_HEIGHT
 		);
@@ -169,7 +193,6 @@ class WorldGenerator {
 		chunk.setClimateData(climateData);
 		chunk.setVirtualBlocks(blockGrid);
 		chunk.setActiveBlocksBySurfaceBlocks(surfaceBlocks);
-
 		world.setChunk(chunkPos, chunk);
 		return chunk;
 	}

@@ -1,4 +1,14 @@
-import { Color3, Color4, Mesh, Scene, Vector3, Vector4, VertexData } from "@babylonjs/core";
+import {
+	Color3,
+	Color4,
+	InstancedMesh,
+	Material,
+	Mesh,
+	Scene,
+	Vector3,
+	Vector4,
+	VertexData,
+} from "@babylonjs/core";
 
 export const FaceTypes = ["front", "back", "right", "left", "top", "bottom"] as const;
 export type FaceType = (typeof FaceTypes)[number];
@@ -29,19 +39,34 @@ const FaceVertices: Record<FaceType, Vector3[]> = {
 };
 
 class BlockMeshBuilder {
-	static WaterBlocks: Mesh[] = []; // 所有水方块都推入这里
+	static meshTemplates: Map<string, Mesh> = new Map();
+
 	static createBlockMesh(
 		name: string,
 		options: {
-			size?: number;
 			faceUV: Vector4[]; // Babylon box 格式 UV
 			faces?: Faces;
 			faceColors?: FaceColors;
+			material: Material;
+			useInstanceMesh: boolean; // 是否使用实例网格
 		},
 		scene: Scene
-	): Mesh {
-		const { size = 1, faceUV, faces, faceColors } = options;
+	): InstancedMesh | Mesh {
+		const { faceUV, faces, faceColors, material, useInstanceMesh } = options;
+		if (faces && !Object.keys(faces).length) {
+			console.error("faces的值不能为空对象", faces);
+		}
+		if (useInstanceMesh && this.meshTemplates.has(name)) {
+			return this.meshTemplates.get(name)!.createInstance(name);
+		}
+		const mesh = new Mesh(name, scene);
+		this.getVertexData(name, faceUV, faces, faceColors).applyToMesh(mesh);
+		mesh.material = material;
+		useInstanceMesh && this.meshTemplates.set(name, mesh);
+		return useInstanceMesh ? mesh.createInstance(name) : mesh;
+	}
 
+	static getVertexData(name: string, faceUV: Vector4[], faces?: Faces, faceColors?: FaceColors) {
 		const positions: number[] = [];
 		const indices: number[] = [];
 		const normals: number[] = [];
@@ -57,7 +82,7 @@ class BlockMeshBuilder {
 			const uv = faceUV[i]!;
 
 			for (let i = 0; i < 4; i++) {
-				const v = verts[i].scale(size); // 缩放支持
+				const v = verts[i].scale(1); // 缩放支持
 				positions.push(v.x, v.y, v.z);
 				normals.push(normal.x, normal.y, normal.z);
 
@@ -80,21 +105,13 @@ class BlockMeshBuilder {
 			);
 			vertexCount += 4;
 		}
-
-		const mesh = new Mesh(name, scene);
-		if (positions.length) {
-			const vertexData = new VertexData();
-			vertexData.positions = positions;
-			vertexData.normals = normals;
-			vertexData.indices = indices;
-			vertexData.uvs = uvs;
-			vertexData.colors = colors;
-			vertexData.applyToMesh(mesh);
-		} else {
-			console.error("faces的值不能为空对象", faces);
-		}
-
-		return mesh;
+		const vertexData = new VertexData();
+		vertexData.positions = positions;
+		vertexData.normals = normals;
+		vertexData.indices = indices;
+		vertexData.uvs = uvs;
+		vertexData.colors = colors;
+		return vertexData;
 	}
 }
 

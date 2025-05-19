@@ -422,7 +422,6 @@ export class NoiseWorker {
 
 				const temperature = this.calculateTemperature(worldX, worldZ);
 				const humidity = this.calculateHumidity(worldX, worldZ);
-
 				temperatureGrid.set(localX, localZ, temperature);
 				humidityGrid.set(localX, localZ, humidity);
 				oceanDistanceGrid.set(localX, localZ, this.calculateOceanShoreDistance(worldX, worldZ));
@@ -545,8 +544,7 @@ export class NoiseWorker {
 							const dirtHeight = MathUtils.lerp(300, 30, adjustedMountain);
 
 							const isDesert =
-								(temp > 8 && humid < 8 && mountainVal < 0.97) ||
-								(Math.abs(oceanDist) < 16 && mountainVal < 0.97);
+								mountainVal < 0.97 && ((temp > 8 && humid < 8) || Math.abs(oceanDist) < 16);
 
 							for (let subY = 0; subY < 8; subY++) {
 								const terrainY = blockY * 8 + subY;
@@ -593,14 +591,14 @@ export class NoiseWorker {
 
 		if (isDesert) {
 			if (currentDensity < stoneHeight) {
-				return Blocks.Dirt;
+				return Blocks.SandStone;
 			} else if (currentDensity < dirtHeight) {
-				return Blocks.Sand;
+				return Blocks.GraniteStone;
 			} else {
-				return Blocks.Stone;
+				return Blocks.BasaltStone;
 			}
 		} else {
-			return currentDensity < dirtHeight ? Blocks.Sand : Blocks.Stone;
+			return currentDensity < dirtHeight ? Blocks.GraniteStone : Blocks.BasaltStone;
 		}
 	}
 

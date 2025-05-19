@@ -1,7 +1,7 @@
-import {Blocks} from "@/blocks/core/Blocks.ts";
+import { Blocks } from "@/blocks/core/Blocks.ts";
 
 interface BlockInfo {
-    description: string;
+	description: string;
 }
 
 /**
@@ -11,10 +11,10 @@ interface BlockInfo {
  * @constructor
  */
 export function BlockEntity(blockType: Blocks, blockInfo?: Partial<BlockInfo>) {
-    return function (target: any) {
-        // 将传入的参数与类关联
-        target.__isEntityBlock = true;
-        target.__blockType = blockType;
-        target.__blockInfo = blockInfo;
-    }
+	return function (target: any) {
+		// 将传入的参数与类关联
+		target.__isEntityBlock = true;
+		target.__blockType = blockType;
+		target.__blockInfo = blockInfo;
+	};
 }

@@ -8,7 +8,7 @@ export class World {
 	private chunks: Map<string, Chunk> = new Map();
 
 	private worldName: string = "";
-	private _lastChunkKey?: string = "0,0";
+	private _lastChunkKey?: string;
 
 	constructor(public scene: Scene) {}
 
@@ -40,9 +40,10 @@ export class World {
 			y: 0,
 			z: position.z,
 		});
-		console.log(chunk);
-		if (!chunk) return 0;
-
+		if (!chunk) {
+			console.error("区块生成位置错误，或传入坐标位置错误");
+			return 0;
+		}
 		// 从顶部开始查找有方块的高度
 		for (let y = CHUNK_HEIGHT - 1; y >= 0; y--) {
 			const block = chunk.getVirtualBlock({ x: localPos.x, y, z: localPos.z }, true);
@@ -95,6 +96,11 @@ export class World {
 		if (!chunk) return false;
 		chunk.safeUpdateBlockAndEffectNeighbor(new Vector3(localPos.x, localPos.y, localPos.z), block);
 		return true;
+	}
+
+	isChunkLoaded(pos: Position) {
+		const { chunk } = this._getChunkAndLocalPos(pos);
+		return !!chunk;
 	}
 
 	private _getChunkAndLocalPos(pos: Position) {

@@ -62,12 +62,12 @@ export class Chunk {
 		return null;
 	}
 
-	getKeyByPos({ x, y, z }: Position) {
+	getKey({ x, y, z }: Position) {
 		return `${x},${y},${z}`;
 	}
 
 	setActiveBlock(pos: Position, block: Nullable<Block>) {
-		let key = this.getKeyByPos(pos);
+		let key = this.getKey(pos);
 		if (block) this.activeBlocks.set(key, block);
 		else this.activeBlocks.delete(key);
 	}
@@ -114,7 +114,11 @@ export class Chunk {
 	}
 
 	setBlockGlobalAndRenderSingle(pos: Position, block: Nullable<Block>, faces?: Faces) {
-		this.world.setBlockSingle(this.toWorldPos(pos), block, faces);
+		if (this.inBounds(pos)) {
+			this.trySetActiveBlockAndRenderSingle(pos, block, faces);
+		} else {
+			this.world.setBlockSingle(this.toWorldPos(pos), block, faces);
+		}
 	}
 
 	safeGetBlock(pos: Position) {
@@ -130,10 +134,13 @@ export class Chunk {
 	 * @param block
 	 */
 	safeUpdateBlockAndEffectNeighbor(localPos: Vector3, block: Block) {
+		const isDelete = block instanceof AirBlock;
 		// 获取该方块周围可能受影响的方块位置
 		const affectedPositions = Object.values(FaceDirectionOffset)
 			.map(offset => localPos.add(offset))
 			.concat(localPos);
+		// 记录一下原来的方块类型
+		const prevBlockType = this.getVirtualBlock(localPos);
 		// 放置方块
 		this.safeSetBlock(localPos, block);
 
@@ -144,26 +151,51 @@ export class Chunk {
 			return;
 		}
 
+		// 如果原来的方块存在加入set
+		const affectedBlockTypes = new Set<Blocks>();
+		prevBlockType && affectedBlockTypes.add(prevBlockType);
+
 		// 对每个受影响的方块进行渲染更新
 		for (const affectedPos of affectedPositions) {
+			const isInBounds = this.inBounds(affectedPos);
 			const affectedBlock = this.safeGetBlock(affectedPos);
 			// 透明方块不受影响
 			if (!affectedBlock || affectedBlock instanceof ModelBlock) continue;
+
 			// 获取该方块可见面
 			const visibleFaces = this.calculateVisibleFaces(affectedPos);
 			// 如果该方块更新后所有面均不可见直接销毁否则重新渲染
 			if (visibleFaces) {
-				// 委托给对应的区块更新面
 				this.setBlockGlobalAndRenderSingle(affectedPos, affectedBlock, visibleFaces);
 			} else {
 				// 委托给对应的区块删除面
 				this.setBlockGlobalAndRenderSingle(affectedPos, null);
 			}
+			affectedBlockTypes.add(affectedBlock.blockType);
 		}
 		// 在删除方块的时候重新合并网格
-		if (block instanceof AirBlock) {
-			this.mergeMesh();
+		if (isDelete && affectedBlockTypes.size) {
+			this.mergeMesh(affectedBlockTypes);
 		}
+	}
+
+	hasAllNeighbors(): boolean {
+		const { x, y, z } = this.chunkPos;
+
+		const offsets = [
+			[-1, 0, 0], // left
+			[1, 0, 0], // right
+			[0, 0, -1], // front
+			[0, 0, 1], // back
+		];
+
+		for (const [dx, dy, dz] of offsets) {
+			if (!this.world.isChunkLoaded({ x: x + dx, y: y + dy, z: z + dz })) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	/**
@@ -196,7 +228,8 @@ export class Chunk {
 		const visibleFaces: Partial<Record<FaceType, boolean>> = {};
 		let flag = false;
 		const current = this.getVirtualBlock(pos);
-		const isTransparent = blockFactory.getBlockClass(current!)?.__isTransparent;
+		const currentBlockClass = blockFactory.getBlockClass(current!);
+		const isTransparent = currentBlockClass?.__isTransparent;
 
 		for (const face of FaceTypes) {
 			const offset = FaceDirectionOffset[face];
@@ -206,8 +239,8 @@ export class Chunk {
 			if (isTransparent) {
 				// 透明方块：只渲染邻接空气（null）的面
 				if (
-					neighbor === null ||
-					(neighbor && blockFactory.getBlockClass(neighbor)?.__isModelBlock)
+					neighbor !== undefined &&
+					(neighbor === null || neighbor !== current || (neighbor && currentBlockClass?.isSpecial))
 				) {
 					visibleFaces[face] = true;
 					flag = true;
@@ -215,8 +248,8 @@ export class Chunk {
 			} else {
 				// 不透明方块：渲染邻接透明或空气的面
 				if (
-					neighbor === null ||
-					(neighbor !== undefined && blockFactory.getBlockClass(neighbor)?.__isTransparent)
+					neighbor !== undefined &&
+					(neighbor === null || blockFactory.getBlockClass(neighbor)?.__isTransparent)
 				) {
 					visibleFaces[face] = true;
 					flag = true;
@@ -225,6 +258,13 @@ export class Chunk {
 		}
 
 		return flag && visibleFaces;
+	}
+
+	trySetActiveBlock(pos: Position, block: Block) {
+		let key = this.getKey(pos);
+		if (!this.activeBlocks.has(key)) {
+			this.activeBlocks.set(key, block);
+		}
 	}
 
 	trySetActiveBlockAndRenderSingle(pos: Position, block: Nullable<Block>, faces?: Faces) {
@@ -238,13 +278,13 @@ export class Chunk {
 		// 删除
 		else if (activeBlock && !block) {
 			activeBlock?.dispose();
-			this.activeBlocks.delete(this.getKeyByPos(pos));
+			this.activeBlocks.delete(this.getKey(pos));
 			return true;
 		}
 		// 替换
 		else if (block && activeBlock) {
 			activeBlock?.dispose();
-			this.activeBlocks.delete(this.getKeyByPos(pos));
+			this.activeBlocks.delete(this.getKey(pos));
 			this.setBlockSynchronous(pos, block);
 			block.tryRender(faces);
 		}
@@ -253,7 +293,7 @@ export class Chunk {
 	}
 
 	getActiveBlock(pos: Position) {
-		return this.activeBlocks.get(this.getKeyByPos(pos));
+		return this.activeBlocks.get(this.getKey(pos));
 	}
 
 	render(render: boolean = true) {
@@ -267,28 +307,36 @@ export class Chunk {
 		this.mergeMesh();
 	}
 
-	dispose() {
-		this.chunkMesh?.dispose();
+	disposeActiveBlocks() {
+		this.activeBlocks.forEach((block: Block) => {
+			block.dispose();
+		});
 	}
 
-	getPosByKey(key: string): Position {
+	dispose() {
+		this.chunkMesh?.dispose();
+		this.disposeActiveBlocks();
+	}
+
+	getPosition(key: string): Position {
 		const [x, y, z] = key.split(",").map(Number);
 		return { x, y, z };
 	}
 
-	mergeMesh() {
-		this.chunkMesh?.dispose();
-
+	mergeMesh(blockTypes?: Set<Blocks>) {
 		const groupedMeshes = new Map<number, Mesh[]>();
 
-		// Step 1: 按材质 ID 或其它标识分组 mesh
+		// Step 1: 按 blockType 分组 mesh（可指定类型列表）
 		for (const [key, block] of this.activeBlocks) {
 			if (block instanceof ModelBlock) continue;
-			const visibleFaces = this.calculateVisibleFaces(this.getPosByKey(key));
 
+			// 如果指定了 blockTypes 且当前 block 不在其中，则跳过
+			if (blockTypes && !blockTypes.has(block.blockType)) continue;
+
+			const visibleFaces = this.calculateVisibleFaces(this.getPosition(key));
 			if (visibleFaces) {
 				const mesh = block.createMesh?.(visibleFaces);
-				if (mesh) {
+				if (mesh && mesh instanceof Mesh) {
 					if (!groupedMeshes.has(block.blockType)) {
 						groupedMeshes.set(block.blockType, []);
 					}
@@ -303,32 +351,53 @@ export class Chunk {
 		for (const [blockType, meshes] of groupedMeshes.entries()) {
 			if (meshes.length === 0) continue;
 
-			// 使用其中一个 mesh 作为参考
 			const reference = meshes[0];
-			// 取消自动清理，改为在下方手动清理
 			const merged = Mesh.MergeMeshes(meshes, false, true, undefined, false, true)!;
-			// 拷贝渲染/交互行为
 			merged.checkCollisions = reference.checkCollisions;
 			merged.isPickable = reference.isPickable;
 			merged.metadata = { blockType };
 			mergedMeshes.push(merged);
 		}
 
-		// Step 3: 设置最终 chunkMesh 为多个 merged 的父容器
-		const container = new Mesh("chunk-container", this.world.scene);
-		mergedMeshes.forEach(mesh => mesh.setParent(container));
+		// Step 3: 设置 chunkMesh
+		if (!blockTypes) {
+			this.chunkMesh?.dispose();
+			// 全量合并
+			const container = new Mesh("chunk-container", this.world.scene);
+			mergedMeshes.forEach(mesh => mesh.setParent(container));
 
-		// Step4: 手动调用一下dispose,防止mesh的表现不一致引发的逻辑错误
-		this.activeBlocks.forEach(block => {
-			block.dispose();
-		});
-		this.chunkMesh = container;
+			// Step 4: 销毁所有 block 的 mesh 资源
+			this.activeBlocks.forEach(block => block.dispose());
+			this.chunkMesh = container;
+		} else {
+			// 局部更新：替换指定类型的子 mesh
+			if (!this.chunkMesh) {
+				console.error("网格尚未初始化，无法进行局部更新");
+				return;
+			}
+
+			// 先清理对应 blockType 的旧 mesh
+			this.chunkMesh.getChildMeshes().forEach(child => {
+				if (child.metadata?.blockType !== undefined && blockTypes.has(child.metadata.blockType)) {
+					child.dispose();
+				}
+			});
+
+			// 添加新的 merged mesh
+			mergedMeshes.forEach(mesh => mesh.setParent(this.chunkMesh!));
+			// 清空所有单个方块的网格
+			this.disposeActiveBlocks();
+		}
+	}
+
+	calcSurfaceBlocks() {
+		// 请求worker
 	}
 
 	setActiveBlocksBySurfaceBlocks(surfaceBlocks: Set<string>) {
 		Array.from(surfaceBlocks).forEach(key => {
 			if (surfaceBlocks.has(key)) {
-				const block = this.createBlockByVirtual(this.getPosByKey(key))!;
+				const block = this.createBlockByVirtual(this.getPosition(key))!;
 				this.activeBlocks.set(key, block);
 			}
 		});

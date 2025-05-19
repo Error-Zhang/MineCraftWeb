@@ -12,8 +12,9 @@ import MathUtils from "@/game-root/utils/MathUtils.ts";
 
 @BlockEntity(Blocks.CraftTable)
 class CraftTableBlock extends ModelBlock implements IInteractableBlock {
+	static override __isInteractable = true;
 	static override maxCount: number = 1;
-	readonly guid: string;
+	override readonly guid: string;
 
 	constructor(scene: Scene, position: Vector3) {
 		super({ scene, position }, getBlockModel("CraftTable"));
@@ -33,7 +34,7 @@ class CraftTableBlock extends ModelBlock implements IInteractableBlock {
 		};
 	}
 
-	onInteract(): void {
+	override onInteract(): void {
 		gameEventBus.emit(GameEvents.interactWithBlock, { blockType: this.blockType, guid: this.guid });
 	}
 

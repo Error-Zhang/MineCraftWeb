@@ -100,13 +100,15 @@ export class Player {
 		const pick = this.camera.getPickInfo(this.maxPlaceDistance);
 		if (!pick) return;
 
-		const pickedPos = pick.pickedPoint!;
 		const faceNormal = pick.getNormal(true);
 		if (!faceNormal) return;
 
+		const pickedPos = pick.pickedPoint!;
 		const targetPos = this.getCurrentBlockPos(pickedPos, faceNormal); // 当前方块坐标
-		const block = this.world.getBlockGlobal(targetPos) as unknown as IInteractableBlock;
-		block.onInteract?.();
+		const block = this.world.getBlockGlobal(targetPos);
+		if (block?.isInteractable) {
+			(<IInteractableBlock>block).onInteract();
+		}
 	}
 
 	// 放置方块

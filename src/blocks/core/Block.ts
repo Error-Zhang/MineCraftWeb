@@ -2,6 +2,7 @@ import {
 	AbstractMesh,
 	Color3,
 	ImportMeshAsync,
+	InstancedMesh,
 	Mesh,
 	MeshBuilder,
 	Scene,
@@ -21,7 +22,7 @@ import BlockMeshBuilder, {
 } from "@/blocks/core/BlockMeshBuilder.ts";
 import { BlockMaterialManager } from "@/blocks/core/BlockMaterialManager.ts";
 import { BlockRecipe } from "@/blocks/core/BlockTypes.ts";
-import BlockAnimation from "@/blocks/core/BlockAnimation.ts";
+import { MaterialManager } from "@/blocks/core/BlockRenderManager.ts";
 
 interface BlockProps {
 	scene: Scene;
@@ -36,12 +37,18 @@ export abstract class Block {
 	static readonly __isCollision: boolean = true;
 	static readonly __isAnimator: boolean = false;
 	static readonly __isModelBlock: boolean = false;
+	static readonly __isInteractable: boolean = false;
 	readonly scene: Scene;
 	readonly position: Vector3;
+	readonly guid?: string;
 
 	constructor(scene: Scene, position: Vector3) {
 		this.scene = scene;
 		this.position = position;
+	}
+
+	static get isSpecial(): boolean {
+		return this instanceof ModelBlock || this.__isInteractable;
 	}
 
 	get isTransparent() {
@@ -60,9 +67,15 @@ export abstract class Block {
 		return (this.constructor as typeof Block).__isCollision;
 	}
 
+	get isInteractable() {
+		return (this.constructor as typeof Block).__isInteractable;
+	}
+
+	onInteract?(): void;
+
 	onCreatedMesh?(): void;
 
-	createMesh?(faces?: Faces): Mesh;
+	createMesh?(faces?: Faces): InstancedMesh | Mesh;
 
 	abstract render(faces?: Faces): void;
 
@@ -81,7 +94,7 @@ export abstract class TextureBlock extends Block {
 	static textureCache: Map<string, Texture> = new Map(); // 纹理缓存
 	protected abstract uv: Vector4[];
 	protected uvGrid?: UVGrid; // 控制动画的大网格
-	protected mesh: Mesh | undefined;
+	protected mesh?: InstancedMesh | Mesh;
 	protected faceColors?: FaceColors;
 	protected color: Color3 = new Color3(1, 1, 1);
 	private faces?: Faces;
@@ -91,7 +104,7 @@ export abstract class TextureBlock extends Block {
 	}
 
 	// 会被大量调用，所以尽可能少的存储mesh
-	override createMesh(faces?: Faces): Mesh {
+	override createMesh(faces?: Faces) {
 		if (this.mesh && !this.isFaceChange(faces)) {
 			return this.mesh;
 		} else {
@@ -125,17 +138,6 @@ export abstract class TextureBlock extends Block {
 		this.mesh?.setEnabled(active);
 	}
 
-	registerAnimation() {
-		if (this.uvGrid && this.mesh) {
-			BlockAnimation.getInstance(this.scene).registerAnimatedMesh(
-				this.blockType.toString(),
-				this.mesh,
-				this.faces,
-				this.uvGrid
-			);
-		}
-	}
-
 	override render(faces?: Faces, texturePath = TextureBlock.texturePath) {
 		this.dispose();
 		const mesh = this._createMesh(texturePath, { faces });
@@ -160,6 +162,16 @@ export abstract class TextureBlock extends Block {
 		delete this.mesh;
 	}
 
+	/**
+	 * 默认是不透明方块的实现(适用于大部分方块，特殊方块需对该方法进行 override)
+	 */
+	getMaterial() {
+		return MaterialManager.getOpaqueBlockMaterial({
+			scene: this.scene,
+			blockType: this.blockType,
+		});
+	}
+
 	protected _createMesh(
 		texturePath: string,
 		{
@@ -171,22 +183,7 @@ export abstract class TextureBlock extends Block {
 			isEmissive?: boolean;
 		}
 	) {
-		const mesh = BlockMeshBuilder.createBlockMesh(
-			this.blockType.toString(),
-			{
-				faceUV: this.uv,
-				faces,
-				faceColors: this.faceColors,
-			},
-			this.scene
-		);
-
-		// 启用边缘渲染，用于鼠标悬浮显示边框
-		mesh.enableEdgesRendering();
-		mesh.edgesRenderer!.isEnabled = false; // 默认先关闭，否则会显示红色边框
-		// 开启碰撞
-		this.isCollision && (mesh.checkCollisions = true);
-		mesh.material = BlockMaterialManager.getBlockMaterial({
+		const material = BlockMaterialManager.getBlockMaterial({
 			scene: this.scene,
 			blockType: this.blockType,
 			texturePath,
@@ -194,6 +191,21 @@ export abstract class TextureBlock extends Block {
 			color: this.color,
 			...args,
 		});
+		const mesh = BlockMeshBuilder.createBlockMesh(
+			this.blockType.toString(),
+			{
+				faceUV: this.uv,
+				faces,
+				faceColors: this.faceColors,
+				material,
+				useInstanceMesh: false,
+			},
+			this.scene
+		);
+		// 开启碰撞
+		this.isCollision && (mesh.checkCollisions = true);
+		mesh.isPickable = true;
+
 		mesh.position = this.position;
 		mesh.setEnabled(false);
 		return mesh;
@@ -226,7 +238,7 @@ export abstract class ModelBlock extends Block {
 	abstract setMaterial(mesh: AbstractMesh, config: any): void;
 
 	async loadModel(scene: Scene, config: { noCache: boolean; isEmissive?: boolean }) {
-		let modelKey: string = `${this.blockType}Model`;
+		let modelKey: string = `${this.blockType}`;
 		const { meshes } = await ImportMeshAsync(this.modelPath, scene);
 
 		// 1. 创建模型节点并组合子 mesh
@@ -246,15 +258,13 @@ export abstract class ModelBlock extends Block {
 			scene
 		);
 		// 创建透明材质并应用到 collider
-		const transparentMaterial = new StandardMaterial(`${modelKey}TransparentMat`, scene);
+		const transparentMaterial = new StandardMaterial(`${modelKey}`, scene);
 		transparentMaterial.alpha = 0; // 设置材质的透明度为 0，使得面不可见
 
 		collider.material = transparentMaterial;
 		collider.checkCollisions = true;
 		collider.isPickable = true;
-		collider.enableEdgesRendering();
-		collider.edgesRenderer!.isEnabled = false; // 默认隐藏边框
-
+		collider.visibility = 0;
 		// 设置父子关系
 		node.parent = collider;
 
