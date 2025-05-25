@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import GameWindow from "@/game-root/events/GameWindow.ts";
+import GameWindow from "@/game-root/core/GameWindow.ts";
 
 interface UseLongPressOptions {
 	game: GameWindow;

@@ -1,24 +1,13 @@
 import { FreeCamera, Scene, Vector3 } from "@babylonjs/core";
-import { GameOption } from "@/game-root/Game.ts";
-import GameWindow from "@/game-root/events/GameWindow.ts";
-import { gameEventBus } from "@/game-root/events/GameEventBus.ts";
-import { GameEvents } from "@/game-root/events/GameEvents.ts";
-import { Position } from "@/game-root/world/Chunk.ts";
-import { throttle } from "@/game-root/utils/lodash.ts";
+import GameWindow from "@/game-root/core/GameWindow.ts";
+import { usePlayerStore } from "@/store";
 
 export class PlayerCamera {
-	readonly speed: number = 0.1;
-	private readonly option: GameOption;
+	readonly speed: number = 0.3; // Minecraft 风格的移动速度
 	private readonly scene: Scene;
-	private readonly vector: Position;
+	private readonly vector: { x: number; y: number; z: number };
 	private readonly camera: FreeCamera;
-	private rate: number = 1;
-	private moveValue: Position = { x: 0, y: 0, z: 0 };
-	private maxJumpY: number = 0.25;
-	private eachJumpY: number = 0.025;
-	private eachFallY: number = 0.0075;
-	private isJumpStart: boolean = false;
-	private isJumpFall: boolean = false;
+	private moveValue = { x: 0, y: 0, z: 0 };
 	private moveFlags = {
 		forward: false,
 		back: false,
@@ -26,15 +15,12 @@ export class PlayerCamera {
 		right: false,
 		up: false,
 		down: false,
+		sprint: false,
 	};
-	private emitPlayerMove = throttle(() => {
-		gameEventBus.emit(GameEvents.playerMove, { location: this.camera.position });
-	}, 1000);
 
-	constructor(scene: Scene, canvas: HTMLCanvasElement, option: GameOption) {
-		this.option = option;
+	constructor(scene: Scene, canvas: HTMLCanvasElement) {
 		this.scene = scene;
-		this.vector = this.option.start;
+		this.vector = usePlayerStore.getState().position;
 		this.camera = new FreeCamera(
 			"Camera",
 			new Vector3(this.vector.x, this.vector.y, this.vector.z),
@@ -43,7 +29,7 @@ export class PlayerCamera {
 		this.camera.minZ = 0.1;
 		this.camera.checkCollisions = true;
 		this.camera.applyGravity = true;
-		this.camera.inertia = 0.6; // 禁用旋转惯性
+		this.camera.inertia = 0.6;
 		this.camera.speed = 0.6;
 		this.camera.setTarget(new Vector3(0, this.vector.y, 0));
 		this.camera.attachControl(canvas, true);
@@ -51,7 +37,7 @@ export class PlayerCamera {
 		this.scene.onBeforeRenderObservable.add(() => {
 			this.update();
 			if (Object.values(this.moveFlags).find(flag => flag)) {
-				this.emitPlayerMove();
+				usePlayerStore.setState({ position: this.vector });
 			}
 		});
 	}
@@ -80,45 +66,35 @@ export class PlayerCamera {
 	}
 
 	private update(): void {
+		// 计算移动速度倍率
+		const speedMultiplier = this.moveFlags.sprint ? 2 : 1;
+
+		// 水平移动
 		if (this.moveFlags.forward) this.moveFront();
 		if (this.moveFlags.left) this.moveLeft();
 		if (this.moveFlags.back) this.moveBack();
 		if (this.moveFlags.right) this.moveRight();
-		if (this.moveFlags.up) this.moveUp();
-		if (this.moveFlags.down) this.moveDown();
-		this.handleJump();
-	}
 
-	private handleJump() {
-		if (this.isJumpStart) {
-			if (this.moveValue.y + this.eachJumpY < this.maxJumpY && !this.isJumpFall) {
-				// 跳跃开始，上升
-				if (this.moveValue.y < 0) {
-					this.moveValue.y = 0;
-				}
-				this.moveValue.y += this.eachJumpY;
-			} else {
-				// 跳跃结束，开始下落
-				this.isJumpFall = true;
-			}
+		// 垂直移动
+		if (this.moveFlags.up) {
+			this.moveValue.y += this.speed * speedMultiplier;
 		}
-		this.camera.cameraDirection.copyFromFloats(
-			this.moveValue.x,
-			this.isJumpStart ? this.moveValue.y : 0.05,
-			this.moveValue.z
+		if (this.moveFlags.down) {
+			this.moveValue.y -= this.speed * speedMultiplier;
+		}
+
+		// 应用移动
+		this.camera.position.addInPlace(
+			new Vector3(this.moveValue.x, this.moveValue.y, this.moveValue.z)
 		);
-		this.moveValue.x = 0;
-		this.moveValue.z = 0;
-		if (this.isJumpFall) {
-			if (this.moveValue.y > -this.maxJumpY) {
-				// 跳跃过程中不断下落
-				this.moveValue.y -= this.eachFallY;
-			} else {
-				// 下落结束，可以开始下一次跳跃
-				this.isJumpFall = false;
-				this.isJumpStart = false;
-			}
-		}
+
+		// 更新位置状态
+		this.vector.x = this.camera.position.x;
+		this.vector.y = this.camera.position.y;
+		this.vector.z = this.camera.position.z;
+
+		// 重置移动值
+		this.moveValue = { x: 0, y: 0, z: 0 };
 	}
 
 	private moveFront(): void {
@@ -137,22 +113,12 @@ export class PlayerCamera {
 		this.moveByDirection(this.camera.getDirection(Vector3.Right()));
 	}
 
-	private moveUp(): void {
-		this.isJumpStart = true;
-	}
-
-	private moveDown(): void {
-		if (!this.isJumpStart) {
-			this.moveValue.y -= 0.1;
-		}
-	}
-
 	private moveByDirection(direction: Vector3): void {
-		const move = this.speed * this.rate;
+		const speedMultiplier = this.moveFlags.sprint ? 2 : 1;
+		const move = this.speed * speedMultiplier;
 		const dir = direction.normalize().scale(move);
-		const result = this.inBoundsXZ(dir.x, dir.z);
-		this.moveValue.x += result.x;
-		this.moveValue.z += result.z;
+		this.moveValue.x += dir.x;
+		this.moveValue.z += dir.z;
 	}
 
 	private setFlag(code: string, state: boolean) {
@@ -175,31 +141,9 @@ export class PlayerCamera {
 			case "ShiftLeft":
 				this.moveFlags.down = state;
 				break;
+			case "ControlLeft":
+				this.moveFlags.sprint = state;
+				break;
 		}
-	}
-
-	// 空气墙
-	private inBoundsXZ(x: number, z: number): { x: number; z: number } {
-		let x0 = x,
-			z0 = z;
-		if (x < 0) {
-			if (this.vector.x + x < this.option.bounds.topLeft.x) {
-				x0 = 0;
-			}
-		} else {
-			if (this.vector.x + x > this.option.bounds.bottomRight.x) {
-				x0 = 0;
-			}
-		}
-		if (z < 0) {
-			if (this.vector.z + z < this.option.bounds.topLeft.z) {
-				z0 = 0;
-			}
-		} else {
-			if (this.vector.z + z > this.option.bounds.bottomRight.z) {
-				z0 = 0;
-			}
-		}
-		return { x: x0, z: z0 };
 	}
 }

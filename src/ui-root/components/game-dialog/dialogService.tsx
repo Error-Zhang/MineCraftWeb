@@ -12,9 +12,16 @@ export interface ConfirmOptions {
 }
 
 export const openGameDialog = (options: ConfirmOptions) => {
+	const wrapper = document.getElementById("game-ui-wrapper");
+	if (!wrapper) {
+		console.error("game-ui-wrapper element not found");
+		return;
+	}
+
 	if (!container) {
 		container = document.createElement("div");
-		document.body.appendChild(container);
+		container.style.pointerEvents = "auto";
+		wrapper.appendChild(container);
 	}
 
 	const root = createRoot(container);

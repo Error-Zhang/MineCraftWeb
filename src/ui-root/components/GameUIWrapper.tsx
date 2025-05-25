@@ -12,9 +12,6 @@ function setResponsiveFontWithCanvas(
 ) {
     const resize = () => {
         const width = canvas.clientWidth;
-        const height = canvas.clientHeight;
-        const minSize = Math.min(width, height); // 取最小边
-        // console.log("canvas size:", width, height);
         const scale = width / baseWidth;
         const fontSize = baseFontSize * scale;
         target.style.fontSize = `${fontSize}px`;

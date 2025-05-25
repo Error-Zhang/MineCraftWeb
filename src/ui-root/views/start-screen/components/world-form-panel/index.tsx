@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from "react";
 import "./index.less";
-import worldApi, { IWorld } from "@/api/worldApi.ts";
 import GameButton from "@/ui-root/components/game-button";
-import exitIcon from "@/assets/icons/exit.svg";
+import exitIcon from "@/ui-root/assets/icons/exit.svg";
 import GameInput from "@/ui-root/components/game-input";
 import GameSelect from "@/ui-root/components/game-select";
 import { openGameDialog } from "@/ui-root/components/game-dialog/dialogService.tsx";
@@ -14,6 +13,8 @@ import {
 	seasonOptions,
 	worldModeOptions,
 } from "./constant";
+import { IWorld } from "@/api/interface.ts";
+import { worldApi } from "@/api";
 
 interface WorldFormPanelProps {
 	world?: IWorld;

@@ -1,10 +1,10 @@
 import { Dispatch, SetStateAction, useEffect } from "react";
-import { GameEvents } from "@/game-root/events/GameEvents";
-import GameStore from "@/game-root/events/GameStore";
-import GameWindow from "@/game-root/events/GameWindow.ts";
+import { GameEvents } from "@/game-root/core/GameEvents";
+import GameStore from "@/game-root/core/GameStore";
+import GameWindow from "@/game-root/core/GameWindow.ts";
 import { SlotType } from "@/ui-root/components/slot";
 import useLongPress from "@/ui-root/views/hotbar/useLongPress.tsx";
-import { gameEventBus } from "@/game-root/events/GameEventBus.ts";
+import { gameEventBus } from "@/game-root/core/GameEventBus.ts";
 
 interface UseGameControlsOptions {
 	slots: SlotType[];

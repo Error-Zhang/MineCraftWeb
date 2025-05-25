@@ -1,14 +1,13 @@
 import React, { useEffect, useState } from "react";
-import worldApi, { IWorld } from "@/api/worldApi";
 import "./index.less";
 import { ScreenPage } from "@/ui-root/views/start-screen";
 import GameDialog from "../../../../components/game-dialog";
 import GameButton from "@/ui-root/components/game-button";
 import WorldFormPanel from "../world-form-panel";
-import deleteIcon from "@/assets/icons/delete.svg";
-import editIcon from "@/assets/icons/edit.svg";
-import backIcon from "@/assets/icons/back.svg";
-import doorIcon from "@/assets/icons/door.svg";
+import deleteIcon from "@/ui-root/assets/icons/delete.svg";
+import editIcon from "@/ui-root/assets/icons/edit.svg";
+import backIcon from "@/ui-root/assets/icons/back.svg";
+import doorIcon from "@/ui-root/assets/icons/door.svg";
 import {
 	gameModeOptions,
 	getLabelByValue,
@@ -17,11 +16,12 @@ import {
 	worldViewOptions,
 } from "@/ui-root/views/start-screen/components/world-form-panel/constant.ts";
 import WorldPlayerPanel from "@/ui-root/views/start-screen/components/world-player-panel";
-import playerApi from "@/api/playerApi.ts";
-import { gameEventBus } from "@/game-root/events/GameEventBus.ts";
-import { GameEvents } from "@/game-root/events/GameEvents.ts";
-import gameStore from "@/game-root/events/GameStore.ts";
+
 import GameSelect from "@/ui-root/components/game-select";
+import { IWorld } from "@/api/interface.ts";
+import { usePlayerStore, useUserStore, useWorldStore } from "@/store";
+import { playerApi, worldApi } from "@/api";
+import { gameEvents } from "@/game-root/events";
 
 const WorldManagerMenu: React.FC<{ setPage: (page: ScreenPage) => void }> = ({ setPage }) => {
 	const [worldList, setWorldList] = useState<IWorld[]>([]);
@@ -31,14 +31,13 @@ const WorldManagerMenu: React.FC<{ setPage: (page: ScreenPage) => void }> = ({ s
 	const [isEditing, setIsEditing] = useState(false);
 	const [showPlayerPanel, setShowPlayerPanel] = useState(false);
 	const [worldViewOption, setWorldViewOption] = useState(0);
-	const userId = gameStore.get("userInfo")?.id;
-	useEffect(() => {
-		loadWorlds();
-	}, []);
+	const { userId } = useUserStore();
 
 	const loadWorlds = () => {
 		worldApi.getWorldList().then(setWorldList);
 	};
+
+	useEffect(loadWorlds, []);
 
 	const handleRequestDelete = (world: IWorld) => {
 		setSelectedWorld(world);
@@ -64,14 +63,20 @@ const WorldManagerMenu: React.FC<{ setPage: (page: ScreenPage) => void }> = ({ s
 		loadWorlds();
 	};
 
-	const enterToWorld = async (world: IWorld) => {
-		const player = await playerApi.getPlayer(world.id!);
-		gameStore.set("worldInfo", {
-			playerId: player.id,
-			worldId: world.id!,
-			gameMode: world.gameMode,
-		});
-		gameEventBus.emit(GameEvents.startGame);
+	const enterToWorld = async (world: IWorld, enter: boolean = false) => {
+		const hasPlayer = world.players?.find(player => player.user.id === userId);
+		if (enter || hasPlayer) {
+			const player = await playerApi.getPlayer(world.id!);
+			useWorldStore.setState({
+				worldId: world.id!,
+				gameMode: world.gameMode,
+			});
+			usePlayerStore.setState({ playerId: player.id });
+			gameEvents.emit("startGame");
+		} else {
+			setSelectedWorld(world);
+			setShowPlayerPanel(true);
+		}
 	};
 
 	const showWorldList = worldList.filter(world => {
@@ -160,7 +165,7 @@ const WorldManagerMenu: React.FC<{ setPage: (page: ScreenPage) => void }> = ({ s
 			{showPlayerPanel && (
 				<WorldPlayerPanel
 					worldId={selectedWorld.id!}
-					onEnter={() => enterToWorld(selectedWorld)}
+					onEnter={() => enterToWorld(selectedWorld, true)}
 					onBack={() => setShowPlayerPanel(false)}
 				/>
 			)}

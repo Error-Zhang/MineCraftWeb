@@ -1,6 +1,6 @@
 // src/App.tsx
 import React, { useRef } from "react";
-import GameCanvas from "./game-root/GameCanvas.tsx";
+import GameCanvas from "./ui-root/GameCanvas.tsx";
 
 import GameUI from "@/ui-root/GameUI.tsx";
 

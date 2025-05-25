@@ -19,12 +19,12 @@ const renderPage = (page: ScreenPage, setPage: (page: ScreenPage) => void): Reac
 	}
 };
 
-const StartScreen: React.FC = () => {
+const StartScreen: React.FC<{ hidden: boolean }> = ({ hidden }) => {
 	const ref = useDroneBackgroundMotion();
 	const [page, setPage] = useState<ScreenPage>("main");
 
 	return (
-		<div className="start-screen" ref={ref}>
+		<div className="start-screen" style={hidden ? { display: "none" } : {}} ref={ref}>
 			<DroneOverlayGrid />
 			{renderPage(page, setPage)}
 			<footer className="footer">© 2025 Error.Zhang. All rights reserved.</footer>

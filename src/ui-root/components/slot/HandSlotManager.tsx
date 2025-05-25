@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { SlotType } from "@/ui-root/components/slot/index.tsx";
 import "./index.less";
-import gameStore from "@/game-root/events/GameStore.ts";
+import gameStore from "@/game-root/core/GameStore.ts";
 
 // 使用更严格的类型定义
 type Position = { x: number; y: number };

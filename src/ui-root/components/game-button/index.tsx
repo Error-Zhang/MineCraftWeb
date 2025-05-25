@@ -1,6 +1,6 @@
 import React, { ReactNode } from "react";
 import "./index.less";
-import buttonClickSound from "@/assets/sounds/ButtonClick.flac";
+import buttonClickSound from "@/ui-root/assets/sounds/ButtonClick.flac";
 
 interface GameButtonProps {
 	children?: ReactNode;

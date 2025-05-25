@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
-import blockFactory from "@/blocks/core/BlockFactory.ts";
+import blockFactory from "@/block/core/BlockFactory.ts";
 import CraftingPanel from "@/ui-root/views/craft-table/CraftingPanel.tsx";
-import { Blocks } from "@/blocks/core/Blocks.ts";
-import { BlockRecipe } from "@/blocks/core/BlockTypes.ts";
+import { Blocks } from "@/block/core/Blocks.ts";
+import { BlockRecipe } from "@/block/core/BlockTypes.ts";
 
 const CraftTable: React.FC<{ guid: string }> = ({ guid }) => {
 	const [recipes, setRecipes] = useState<Record<Blocks, BlockRecipe[]>>({} as any);

@@ -1,62 +1,108 @@
-import { Engine, Scene, Vector3 } from "@babylonjs/core";
+import { Engine, Scene } from "@babylonjs/core";
 import { AdvancedDynamicTexture, TextBlock } from "@babylonjs/gui";
-import { Player } from "@/game-root/player/Player.ts";
-import WorldGenerator from "@/game-root/world/WorldGenerator.ts";
-import Sky from "@/game-root/world/Sky.ts";
-import { World } from "@/game-root/world/World.ts";
-import Light from "@/game-root/world/Light.ts";
-import { gameEventBus } from "@/game-root/events/GameEventBus.ts";
-import { GameEvents } from "@/game-root/events/GameEvents.ts";
-import { Position } from "@/game-root/world/Chunk.ts";
 import { throttle } from "@/game-root/utils/lodash.ts";
+import { VoxelEngine } from "@engine/core/VoxelEngine.ts";
+import { ChunkData } from "@engine/types/chunk.type.ts";
+import { Chunk } from "@engine/chunk/Chunk.ts";
+import blocks from "@/game-root/block-definitions/blocks.ts";
+import Assets from "@/game-root/assets";
+import { usePlayerStore, useWorldStore } from "@/store";
+import { Player } from "@/game-root/player/Player.ts";
+
 // import { Inspector } from "@babylonjs/inspector";
 
-// 游戏配置类型
-export type GameOption = {
-	seed: number;
-	gameMode: string;
-	worldMode: string;
-	start: Position; // 初始位置
-	bounds: {
-		topLeft: { x: number; z: number };
-		bottomRight: { x: number; z: number };
-	};
-	visualField: number; // 视野范围（扩展天空盒范围）
-};
-
 export class Game {
+	private voxelEngine: VoxelEngine;
 	private engine: Engine;
 	private scene: Scene;
-	private player?: Player;
+	private player: Player | undefined;
 	private canvas: HTMLCanvasElement;
-	private sky: Sky;
-	private world?: World;
-	private worldReady: Promise<void>;
 
-	constructor(canvas: HTMLCanvasElement, option: GameOption) {
-		console.log("Game started!");
+	constructor(canvas: HTMLCanvasElement) {
+		const voxel = new VoxelEngine(canvas);
 		this.canvas = canvas;
+		this.engine = voxel.engine;
+		this.scene = voxel.scene;
 
-		// 初始化 Babylon 引擎
-		this.engine = new Engine(canvas, false); // 取消抗锯齿防止边缘柔化
-		this.scene = new Scene(this.engine);
-		this.scene.gravity = new Vector3(0, -0.1, 0); // 重力
-		this.scene.collisionsEnabled = true; // 启动碰撞
-		// 添加灯光
-		new Light(this.scene);
-		this.sky = new Sky(this.scene, option);
-		// 生成世界
-		const wg = new WorldGenerator(this.scene, option);
-		this.worldReady = wg.generateWorldParallel().then(world => {
-			this.world = world;
-			const height = world.getHeightAt(option.start);
-			// 更新玩家高度，防止卡墙
-			option.start.y += height;
-			this.player = new Player(this.scene, this.canvas, world, option);
-			gameEventBus.on(GameEvents.playerMove, ({ location }: { location: Position }) => {
-				wg.updateWorldAround(location, world);
-			});
+		voxel.registerBlock({
+			textures: [{ key: "blocks", path: Assets.blocks.atlas }],
+			blocks,
 		});
+
+		this.voxelEngine = voxel;
+		this.attachFPSDisplay();
+	}
+
+	start() {
+		const worldController = this.voxelEngine.registerChunk(this.flatWorldGenerator.bind(this), {
+			chunkHeight: 64,
+		});
+		useWorldStore.setState({ worldController });
+		const playerPos = usePlayerStore.getState().position;
+
+		this.voxelEngine.start();
+		worldController.updateChunk(playerPos.x, playerPos.z).then(() => {
+			// 更新玩家y轴坐标
+			usePlayerStore.setState({
+				position: {
+					...playerPos,
+					y: worldController.getColumnHeight(playerPos.x, playerPos.z) + 2,
+				},
+			});
+			this.player = new Player(this.scene, this.canvas);
+		});
+	}
+
+	dispose() {
+		this.voxelEngine.disposeWorld();
+		useWorldStore.getState().reset();
+		this.player?.dispose();
+	}
+
+	destroy() {
+		this.dispose();
+		this.scene.dispose();
+		this.engine.dispose();
+	}
+
+	async flatWorldGenerator(chunkX: number, chunkZ: number) {
+		const chunkData: ChunkData = {
+			blocks: new Array(16 * 16 * 64).fill(0),
+			dirtyBlocks: {},
+			position: {
+				x: chunkX,
+				z: chunkZ,
+			},
+		};
+
+		// 生成基础地形
+		for (let y = 0; y < 64; y++) {
+			const id = y == 4 ? 1 : y < 4 ? 2 : 0;
+			for (let z = 0; z < 16; z++) {
+				for (let x = 0; x < 16; x++) {
+					const index = y * 16 * 16 + z * 16 + x;
+					chunkData.blocks[index] = id;
+				}
+			}
+		}
+
+		// 在表面添加随机装饰方块
+		const surfaceY = 5; // 表面层高度
+		const decorationBlocks = [3, 4, 5]; // 装饰方块的ID列表
+		const decorationChance = 0.1; // 10%的概率生成装饰方块
+
+		for (let z = 0; z < 16; z++) {
+			for (let x = 0; x < 16; x++) {
+				if (Math.random() < decorationChance) {
+					const randomBlockId =
+						decorationBlocks[Math.floor(Math.random() * decorationBlocks.length)];
+					const index = surfaceY * 16 * 16 + z * 16 + x;
+					chunkData.blocks[index] = randomBlockId;
+				}
+			}
+		}
+
+		return Chunk.fromJSON(chunkData);
 	}
 
 	/**
@@ -82,33 +128,4 @@ export class Game {
 		// 更新 FPS 显示
 		this.scene.onBeforeRenderObservable.add(updateFPS);
 	}
-
-	public showInspector() {
-		// 显示 debug 面板（可选）
-		// Inspector.Show(this.scene, {});
-	}
-
-	public async start() {
-		await this.worldReady;
-		this.engine.setHardwareScalingLevel(1); // 你可以尝试调整硬件缩放级别
-
-		// 开始渲染循环
-		this.engine.runRenderLoop(() => {
-			this.scene.render();
-		});
-
-		this.attachFPSDisplay();
-		// 监听窗口大小变化
-		window.addEventListener("resize", this.handleResize.bind(this));
-	}
-
-	dispose() {
-		this.player?.dispose();
-		this.engine.dispose();
-		window.removeEventListener("resize", this.handleResize.bind(this));
-	}
-
-	private handleResize = () => {
-		this.engine.resize();
-	};
 }

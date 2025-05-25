@@ -1,11 +1,12 @@
 import React, { useState } from "react";
 import "./index.less";
 import GameButton from "@/ui-root/components/game-button";
-import playerApi, { IPlayer } from "@/api/playerApi.ts";
-import gameStore from "@/game-root/events/GameStore.ts";
 import GameInput from "@/ui-root/components/game-input";
 import GameSelect from "@/ui-root/components/game-select";
-import exitIcon from "@/assets/icons/exit.svg";
+import exitIcon from "@/ui-root/assets/icons/exit.svg";
+import { useUserStore } from "@/store";
+import { IPlayer } from "@/api/interface.ts";
+import { playerApi } from "@/api";
 
 interface WorldPlayersPanelProps {
 	worldId: number;
@@ -18,9 +19,9 @@ const sexOptions = [
 	{ label: "女", value: 1 },
 ];
 const WorldPlayersPanel: React.FC<WorldPlayersPanelProps> = ({ worldId, onBack, onEnter }) => {
-	const userId = gameStore.get("userInfo")?.id;
+	const { userId, username } = useUserStore();
 	const [player, setPlayer] = useState<IPlayer>({
-		playerName: gameStore.get("userInfo")?.name!,
+		playerName: username,
 		sex: 0,
 	} as any);
 

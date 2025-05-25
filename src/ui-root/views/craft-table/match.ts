@@ -1,5 +1,5 @@
-import { Blocks } from "@/blocks/core/Blocks.ts";
-import { BlockRecipe } from "@/blocks/core/BlockTypes.ts";
+import { Blocks } from "@/block/core/Blocks.ts";
+import { BlockRecipe } from "@/block/core/BlockTypes.ts";
 import { Nullable } from "@babylonjs/core";
 
 // 滑动匹配算法

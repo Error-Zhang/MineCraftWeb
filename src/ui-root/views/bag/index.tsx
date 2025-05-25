@@ -5,9 +5,9 @@ import InventoryGrid from "@/ui-root/components/inventory-grid";
 import { createEmptySlots } from "@/ui-root/components/slot";
 import { useToggleActive } from "@/ui-root/hooks/useToggle.tsx";
 import { GameContext } from "@/ui-root/GameUI.tsx";
-import { gameEventBus } from "@/game-root/events/GameEventBus.ts";
-import { GameEvents, IGameEvents } from "@/game-root/events/GameEvents.ts";
-import { Blocks } from "@/blocks/core/Blocks.ts";
+import { gameEventBus } from "@/game-root/core/GameEventBus.ts";
+import { GameEvents, IGameEvents } from "@/game-root/core/GameEvents.ts";
+import { Blocks } from "@/block/core/Blocks.ts";
 
 const PanelMap: Partial<Record<Blocks, React.FC<{ guid: string }>>> = {
 	[Blocks.CraftTable]: ({ guid }) => <CraftTable guid={guid} />,

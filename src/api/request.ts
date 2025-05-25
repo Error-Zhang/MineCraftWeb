@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from "axios";
+import { openGameDialog } from "@/ui-root/components/game-dialog/dialogService.tsx";
 
 export const BASE_URL = "http://localhost:5110";
 
@@ -35,12 +36,20 @@ request.interceptors.response.use(
 		// 可根据实际的 code 字段做处理
 		if (res.code !== 200) {
 			console.error("接口报错：", res.message, res.data);
+			openGameDialog({
+				title: "接口错误",
+				message: res.message + (res.data || ""),
+			});
 			return Promise.reject(res);
 		}
 		return res.data;
 	},
 	error => {
 		console.error("网络/服务器错误：", error);
+		openGameDialog({
+			title: "网络/服务器错误",
+			message: error,
+		});
 		return Promise.reject(error);
 	}
 );

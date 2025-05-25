@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { DroppedSlotType, SlotType } from "@/ui-root/components/slot";
-import GameEventBus from "@/game-root/events/GameEventBus.ts";
+import GameEventBus from "@/game-root/core/GameEventBus.ts";
 
 const panelEventBus = new GameEventBus(); // 新建一个panelEventBus专门处理面板之间的通信
 

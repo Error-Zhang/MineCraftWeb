@@ -11,36 +11,28 @@ import {
 	Vector3,
 } from "@babylonjs/core";
 import { AdvancedDynamicTexture, Control, Rectangle } from "@babylonjs/gui";
-import { gameEventBus } from "@/game-root/events/GameEventBus.ts";
-import { GameEvents } from "@/game-root/events/GameEvents.ts";
-import { Blocks } from "@/blocks/core/Blocks.ts";
-import { World } from "@/game-root/world/World.ts";
-import blockFactory from "@/blocks/core/BlockFactory.ts";
-import AirBlock from "@/blocks/natures/AirBlock.ts";
 import { DebugHelper } from "@/game-root/utils/DebugHelper.ts";
-
-import { IInteractableBlock } from "@/blocks/core/BlockInterfaces.ts";
 import { PlayerCamera } from "@/game-root/player/PlayerCamera.ts";
-import { GameOption } from "@/game-root/Game.ts";
 import MathUtils from "@/game-root/utils/MathUtils.ts";
+import { playerEvents } from "@/game-root/events";
+import { usePlayerStore, useWorldStore } from "@/store";
 
 export class Player {
 	// 场景、相机、世界等
 	scene: Scene;
 	camera: PlayerCamera;
-	world: World;
 	debugHelper: DebugHelper;
 
 	// 玩家模型
 	player: Mesh | undefined;
 
 	maxPlaceDistance = 12; // 最大方块放置距离
+	private unsubscribe?: Function;
 
-	constructor(scene: Scene, canvas: HTMLCanvasElement, world: World, option: GameOption) {
+	constructor(scene: Scene, canvas: HTMLCanvasElement) {
 		this.scene = scene;
-		this.world = world;
 
-		this.camera = new PlayerCamera(scene, canvas, option);
+		this.camera = new PlayerCamera(scene, canvas);
 
 		this.addEventListener();
 		this.addCrossHair();
@@ -50,21 +42,32 @@ export class Player {
 		this.debugHelper.createAxisHelper();
 	}
 
-	// 处理键盘输入
-	addEventListener() {
-		gameEventBus.on(GameEvents.placeBlack, this.placeBlock.bind(this));
-		gameEventBus.on(GameEvents.destroyBlock, this.destroyBlock.bind(this));
-		gameEventBus.on(GameEvents.onInteract, this.interactWithBlock.bind(this));
+	private get worldController() {
+		return useWorldStore.getState().worldController!;
 	}
 
 	dispose() {
-		gameEventBus.off(GameEvents.placeBlack, this.placeBlock.bind(this));
-		gameEventBus.off(GameEvents.destroyBlock, this.destroyBlock.bind(this));
-		gameEventBus.off(GameEvents.onInteract, this.interactWithBlock.bind(this));
+		playerEvents.off("placeBlack", this.placeBlock.bind(this));
+		playerEvents.off("destroyBlock", this.destroyBlock.bind(this));
+		playerEvents.off("interactBlock", this.interactWithBlock.bind(this));
+		this.unsubscribe?.();
+		usePlayerStore.getState().reset();
+	}
+
+	// 处理键盘输入
+	private addEventListener() {
+		playerEvents.on("placeBlack", this.placeBlock.bind(this));
+		playerEvents.on("destroyBlock", this.destroyBlock.bind(this));
+		playerEvents.on("interactBlock", this.interactWithBlock.bind(this));
+		// 订阅玩家位置变化
+		this.unsubscribe = usePlayerStore.subscribe(state => {
+			const { x, z } = state.position;
+			this.worldController.updateChunk(x, z);
+		});
 	}
 
 	// 加载玩家模型
-	async loadPlayerModel(modelPath: string) {
+	private async loadPlayerModel(modelPath: string) {
 		const { meshes } = await ImportMeshAsync(modelPath, this.scene);
 		const collider = this.createPlayerCollider();
 		const playerModel = new TransformNode("player", this.scene);
@@ -78,7 +81,7 @@ export class Player {
 	}
 
 	// 创建玩家碰撞体
-	createPlayerCollider(): Mesh {
+	private createPlayerCollider(): Mesh {
 		const collider = MeshBuilder.CreateBox(
 			"playerCollider",
 			{
@@ -95,54 +98,46 @@ export class Player {
 		return collider;
 	}
 
-	// 与方块交互
-	interactWithBlock() {
+	private getTargetBlockInfo() {
 		const pick = this.camera.getPickInfo(this.maxPlaceDistance);
-		if (!pick) return;
+		if (!pick) return null;
 
 		const faceNormal = pick.getNormal(true);
-		if (!faceNormal) return;
+		if (!faceNormal) return null;
 
 		const pickedPos = pick.pickedPoint!;
-		const targetPos = this.getCurrentBlockPos(pickedPos, faceNormal); // 当前方块坐标
-		const block = this.world.getBlockGlobal(targetPos);
-		if (block?.isInteractable) {
-			(<IInteractableBlock>block).onInteract();
-		}
+		const currentBlockPos = this.getCurrentBlockPos(pickedPos, faceNormal);
+
+		return { faceNormal, currentBlockPos };
+	}
+
+	// 与方块交互
+	private interactWithBlock() {
+		const info = this.getTargetBlockInfo();
+		if (!info) return;
+
+		const block = this.worldController.getBlock(info.currentBlockPos);
+		block?.behavior?.onInteract?.();
 	}
 
 	// 放置方块
-	placeBlock({ blockType }: { blockType: Blocks }, callback: () => void) {
-		const pick = this.camera.getPickInfo(this.maxPlaceDistance);
-		if (!pick) return;
+	private placeBlock(blockId: number) {
+		const info = this.getTargetBlockInfo();
+		if (!info) return;
 
-		const faceNormal = pick.getNormal(true);
-		if (!faceNormal) return;
-
-		const pickedPos = pick.pickedPoint!;
-		const target = this.getCurrentBlockPos(pickedPos, faceNormal).add(faceNormal);
-		const block = blockFactory.createBlock(this.scene, blockType, target)!;
-
-		if (this.world.setBlockGlobal(block)) {
-			callback();
-		}
+		const placePos = info.currentBlockPos.add(info.faceNormal);
+		this.worldController.setBlock(placePos, blockId);
 	}
 
 	// 销毁方块
-	destroyBlock() {
-		const pick = this.camera.getPickInfo(this.maxPlaceDistance);
-		if (!pick) return;
+	private destroyBlock() {
+		const info = this.getTargetBlockInfo();
+		if (!info) return;
 
-		const faceNormal = pick.getNormal(true);
-		if (!faceNormal) return;
-
-		const pickedPos = pick.pickedPoint!;
-		const target = this.getCurrentBlockPos(pickedPos, faceNormal);
-
-		this.world.setBlockGlobal(new AirBlock(this.scene, target));
+		this.worldController.setBlock(info.currentBlockPos, 0);
 	}
 
-	showBlockHoverOutline() {
+	private showBlockHoverOutline() {
 		let highlightBox: Mesh | null = null;
 
 		// 创建高亮盒子（只创建一次）
@@ -179,7 +174,7 @@ export class Player {
 	}
 
 	// 计算当前方块位置
-	getCurrentBlockPos(pickedPos: Vector3, faceNormal: Vector3): Vector3 {
+	private getCurrentBlockPos(pickedPos: Vector3, faceNormal: Vector3): Vector3 {
 		return new Vector3(
 			MathUtils.correct(pickedPos.x, faceNormal.x),
 			MathUtils.correct(pickedPos.y, faceNormal.y),
@@ -188,7 +183,7 @@ export class Player {
 	}
 
 	// 在屏幕中心添加一个十字形准星
-	addCrossHair(size = 8, color = "white") {
+	private addCrossHair(size = 8, color = "white") {
 		const ui = AdvancedDynamicTexture.CreateFullscreenUI("CrosshairUI", true, this.scene);
 		const thickness = 1.5;
 		const createLine = (x: number, y: number, width: number, height: number) => {

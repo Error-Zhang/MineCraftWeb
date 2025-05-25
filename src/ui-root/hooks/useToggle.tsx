@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
-import GameWindow from "@/game-root/events/GameWindow.ts";
-import { gameEventBus } from "@/game-root/events/GameEventBus.ts";
-import { GameEvents } from "@/game-root/events/GameEvents.ts";
+import GameWindow from "@/game-root/core/GameWindow.ts";
+import { gameEventBus } from "@/game-root/core/GameEventBus.ts";
+import { GameEvents } from "@/game-root/core/GameEvents.ts";
 
 type KeyBinding = string | string[];
 

@@ -1,15 +1,15 @@
 import React, { useState } from "react";
 import "../index.less";
-import titleIcon from "@/assets/gui/Title.webp";
-import webIcon from "@/assets/gui/Web.webp";
+import titleIcon from "@/ui-root/assets/gui/Title.webp";
+import webIcon from "@/ui-root/assets/gui/Web.webp";
 import GameButton from "@/ui-root/components/game-button";
 import AuthModal from "./auth-modal";
-import gameStore from "@/game-root/events/GameStore.ts";
 import { ScreenPage } from "@/ui-root/views/start-screen";
+import { useUserStore } from "@/store";
 
 const MainMenu: React.FC<{ setPage: (page: ScreenPage) => void }> = ({ setPage }) => {
 	const [showModal, setShowModal] = useState(false);
-	const username = gameStore.get("userInfo")?.name;
+	const { username } = useUserStore();
 	return (
 		<div className="main-menu">
 			<span className="user">

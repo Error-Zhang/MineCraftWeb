@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import "./index.less";
-import userApi from "@/api/userApi.ts";
-import gameStore from "@/game-root/events/GameStore.ts";
+import { userApi } from "@/api";
+import { useUserStore } from "@/store";
 
 interface AuthModalProps {
 	onClose: () => void;
@@ -28,27 +28,20 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
 			setError("两次密码不一致");
 			return;
 		}
-
+		setLoading(true);
+		let userId: number;
 		try {
-			setLoading(true);
-			let userId;
 			if (mode === "register") {
 				const { id } = await userApi.register({ userName: username, passWord: password });
-				userId = id;
+				userId = id!;
 			} else {
 				const { id } = await userApi.login({ userName: username, passWord: password });
-				userId = id;
+				userId = id!;
 			}
-			gameStore.set("userInfo", {
-				id: userId!,
-				name: username,
-			});
-			onClose(); // 登录或注册成功后关闭弹窗
-		} catch (err: any) {
-			const forbid = err.code.toString().startsWith(4);
-			setError(forbid ? err.message : "服务器链接失败");
-		} finally {
+			useUserStore.setState({ userId, username });
 			setLoading(false);
+		} finally {
+			onClose();
 		}
 	};
 
@@ -100,7 +93,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
 					<span
 						className="auth-switch"
 						onClick={() => {
-							gameStore.remove("userInfo");
+							useUserStore.getState().reset();
 							onClose();
 						}}
 					>

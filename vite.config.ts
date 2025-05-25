@@ -6,8 +6,10 @@ export default defineConfig({
 	resolve: {
 		alias: {
 			"@": "/src", // 设置@指向src文件夹
+			"@engine": "/src/engine",
 		},
 	},
+	assetsInclude: ['**/*.gltf', '**/*.glb'],
 	/*server: {
 		proxy: {
 			// 代理 API 请求

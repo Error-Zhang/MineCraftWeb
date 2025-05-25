@@ -2,9 +2,9 @@ import React, { useEffect, useState } from "react";
 import "./index.less";
 import { Nullable } from "@babylonjs/core";
 import { HandSlotController } from "@/ui-root/components/slot/HandSlotManager.tsx";
-import gameStore from "@/game-root/events/GameStore.ts";
+import gameStore from "@/game-root/core/GameStore.ts";
 import blockApi from "@/api/blockApi.ts";
-import BlockType from "@/block-design/definitions/BlockType.ts";
+import BlockType from "@/game-root/block-definitions/BlockType.ts";
 import blockFactory from "@/block-design/core/BlockFactory.ts";
 
 export type SlotType = Nullable<{

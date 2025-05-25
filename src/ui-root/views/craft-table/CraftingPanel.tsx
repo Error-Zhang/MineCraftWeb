@@ -2,12 +2,12 @@ import React, { useContext, useEffect, useRef, useState } from "react";
 import Slot, { createEmptySlots, DroppedSlotType, SlotType } from "../../components/slot";
 import InventoryGrid from "@/ui-root/components/inventory-grid";
 import { GameContext } from "@/ui-root/GameUI.tsx";
-import { Blocks } from "@/blocks/core/Blocks.ts";
+import { Blocks } from "@/block/core/Blocks.ts";
 import { matchesPattern } from "@/ui-root/views/craft-table/match.ts";
 import { useInventorySlots } from "@/ui-root/components/inventory-grid/useInventorySlots.tsx";
-import { BlockRecipe } from "@/blocks/core/BlockTypes.ts";
+import { BlockRecipe } from "@/block/core/BlockTypes.ts";
 import "./index.less";
-import gameStore from "@/game-root/events/GameStore.ts";
+import gameStore from "@/game-root/core/GameStore.ts";
 
 interface CraftingPanelProps {
 	title?: string;
