@@ -2,14 +2,14 @@ import React, { useEffect, useState } from "react";
 import "./index.less";
 import { Nullable } from "@babylonjs/core";
 import { HandSlotController } from "@/ui-root/components/slot/HandSlotManager.tsx";
-import gameStore from "@/game-root/core/GameStore.ts";
-import blockApi from "@/api/blockApi.ts";
-import BlockType from "@/game-root/block-definitions/BlockType.ts";
-import blockFactory from "@/block-design/core/BlockFactory.ts";
+import { blockApi } from "@/api";
 
 export type SlotType = Nullable<{
-	key: BlockType;
+	id: number;
+	key: string;
+	displayName: string;
 	value: number;
+	icon?: string;
 	source: string; // 如 "catalog" | "hotbar"
 }>;
 
@@ -43,11 +43,16 @@ const Slot: React.FC<SlotProps> = ({
 }) => {
 	const [isActive, setIsActive] = useState(false);
 	const [imgError, setImgError] = useState(false);
+
 	useEffect(() => {
-		const cb = (value: boolean) => setIsActive(value);
-		gameStore.on("isSplitting", cb);
-		return () => gameStore.off("isSplitting", cb);
-	}, []);
+		const clear = HandSlotController.subscribe(slot => {
+			!slot && setIsActive(false);
+		});
+		return () => {
+			clear();
+		};
+	}, [setIsActive]);
+
 	const handleClick = (e: any) => {
 		if (!draggable) return;
 
@@ -74,12 +79,15 @@ const Slot: React.FC<SlotProps> = ({
 				onDrop?.({ ...handSlot!, dropCount: 1 });
 				HandSlotController.setHandSlot({ ...handSlot, value: handSlot.value - 1 });
 			}
+			if (HandSlotController.getHandSlot()!.value < 1) {
+				HandSlotController.clearHandSlot();
+			}
 		}
 	};
 
 	return (
 		<div
-			title={slot ? blockFactory.getBlockByType(slot.key)?.definition.displayName : ""}
+			title={slot?.displayName || ""}
 			style={{ cursor: slot ? "grab" : "auto" }}
 			className={`slot ${selected ? "selected" : ""} ${isActive ? "splitting" : ""} ${className}`}
 			onClick={handleClick}
@@ -93,7 +101,7 @@ const Slot: React.FC<SlotProps> = ({
 					onError={() => setImgError(true)}
 				/>
 			) : (
-				slot && <span className="slot-fallback-text">{slot.key}</span>
+				slot && <span className="slot-fallback-text">{slot.displayName}</span>
 			)}
 			{showCount && slot && slot.value > 1 && <span className="slot-number">{slot.value}</span>}
 		</div>

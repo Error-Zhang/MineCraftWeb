@@ -3,7 +3,8 @@ import { Vector4 } from "@babylonjs/core";
 class UVHelper {
 	constructor(
 		private readonly tilesX = 16,
-		private readonly tilesY = 16
+		private readonly tilesY = 16,
+		private readonly padding = 0.001
 	) {}
 
 	/**
@@ -15,7 +16,12 @@ class UVHelper {
 		const tileSizeX = 1 / this.tilesX;
 		const tileSizeY = 1 / this.tilesY;
 
-		return new Vector4(x * tileSizeX, y * tileSizeY, (x + 1) * tileSizeX, (y + 1) * tileSizeY);
+		return new Vector4(
+			x * tileSizeX + this.padding,
+			y * tileSizeY + this.padding,
+			(x + 1) * tileSizeX - this.padding,
+			(y + 1) * tileSizeY - this.padding
+		);
 	}
 
 	/**

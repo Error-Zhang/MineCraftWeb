@@ -1,8 +1,9 @@
 import { WorldRenderer } from "../renderer/WorldRenderer";
 import { Chunk } from "./Chunk";
 import { BlockEntity } from "@engine/types/block.type.ts";
+import { SingleClass } from "@engine/core/Singleton.ts";
 
-export class ChunkManager {
+export class ChunkManager extends SingleClass {
 	public static ChunkSize: number = 16;
 	public static ChunkHeight: number = 128;
 
@@ -11,9 +12,8 @@ export class ChunkManager {
 	public static LoadDistance = this.ViewDistance + 1;
 	public static UnloadDistance = this.LoadDistance + 2;
 	// 单位(方块)
-	public static MinUpdateDistance = Math.max(this.ViewDistance - 1, 1) * this.ChunkSize;
+	public static MinUpdateDistance = Math.max(this.ViewDistance / 2, 1) * this.ChunkSize;
 
-	private static _instance: ChunkManager;
 	// 实例部分
 	private chunks = new Map<string, Chunk>();
 	private readonly generator: (x: number, z: number) => Promise<Chunk>;
@@ -25,6 +25,7 @@ export class ChunkManager {
 		generator: (x: number, z: number) => Promise<Chunk>,
 		worldRenderer: WorldRenderer
 	) {
+		super();
 		this.generator = generator;
 		this.worldRenderer = worldRenderer;
 		this.onChunkLoad(chunk => {
@@ -35,22 +36,8 @@ export class ChunkManager {
 		});
 	}
 
-	public static get Instance(): ChunkManager {
-		if (!this._instance) {
-			throw new Error("ChunkManager is not initialized.");
-		}
-		return this._instance;
-	}
-
-	public static create(
-		generator: (x: number, z: number) => Promise<Chunk>,
-		worldRenderer: WorldRenderer
-	) {
-		if (this._instance) {
-			throw new Error("ChunkManager has already been initialized.");
-		}
-		this._instance = new ChunkManager(generator, worldRenderer);
-		return this._instance;
+	public static override get Instance(): ChunkManager {
+		return this.getInstance();
 	}
 
 	// 静态方法：全局访问区块方块数据
@@ -58,8 +45,18 @@ export class ChunkManager {
 		return this.Instance.getBlock(x, y, z);
 	}
 
-	public static setBlockAt(x: number, y: number, z: number, blockId: number): void {
-		this.Instance.setBlock(x, y, z, blockId);
+	public static setBlockAt(
+		x: number,
+		y: number,
+		z: number,
+		blockId: number,
+		isModel = false
+	): void {
+		if (isModel) {
+			this.Instance.setModelBlock(x, y, z, blockId);
+		} else {
+			this.Instance.setBlock(x, y, z, blockId);
+		}
 	}
 
 	public onChunkLoad(callback: (chunk: Chunk) => void) {
@@ -71,8 +68,7 @@ export class ChunkManager {
 	}
 
 	public async updateChunksAround(x: number, z: number) {
-		const chunkX = Math.floor(x / ChunkManager.ChunkSize);
-		const chunkZ = Math.floor(z / ChunkManager.ChunkSize);
+		const [chunkX, chunkZ] = this.worldToChunk(x, z);
 
 		// 计算需要保留的区块范围
 		const minX = chunkX - ChunkManager.LoadDistance;
@@ -133,7 +129,7 @@ export class ChunkManager {
 	public getBlock(x: number, y: number, z: number): number {
 		const [chunkX, chunkZ, localX, localZ] = this.worldToChunk(x, z);
 		const chunk = this.getChunk(chunkX, chunkZ);
-		return chunk?.getBlock(localX, y, localZ) ?? 0;
+		return chunk?.getBlock(localX, y, localZ) ?? -1;
 	}
 
 	public setBlock(x: number, y: number, z: number, blockId: number) {
@@ -142,6 +138,21 @@ export class ChunkManager {
 		if (chunk) {
 			chunk.setBlock(localX, y, localZ, blockId);
 			this.worldRenderer.updateChunks({ x, y, z });
+		}
+	}
+
+	public setModelBlock(x: number, y: number, z: number, blockId: number) {
+		const [chunkX, chunkZ, localX, localZ] = this.worldToChunk(x, z);
+		const chunk = this.getChunk(chunkX, chunkZ);
+		if (chunk) {
+			chunk.setBlock(localX, y, localZ, blockId);
+			const renderer = this.worldRenderer.getRenderer(chunk.Key)!;
+			let key = `${x},${y},${z}`;
+			if (blockId !== 0) {
+				renderer.addModelBlock(key, blockId);
+			} else {
+				renderer.removeModelBlock(key);
+			}
 		}
 	}
 
@@ -184,7 +195,7 @@ export class ChunkManager {
 		for (let y = ChunkManager.ChunkHeight - 1; y > 0; y--) {
 			const blockId = chunk.getBlock(localX, y, localZ);
 			if (blockId !== 0) {
-				return y;
+				return y + 1;
 			}
 		}
 		return 0;

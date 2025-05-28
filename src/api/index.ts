@@ -1,5 +1,5 @@
 import { del, get, post, put } from "./request.ts";
-import { IBlockType, IPlayer, IUser, IWorld } from "./interface.ts";
+import { IBlockReflect, IPlayer, IUser, IWorld } from "./interface.ts";
 import { useUserStore } from "@/store";
 
 const getUserId = () => useUserStore.getState().userId;
@@ -51,6 +51,9 @@ export const worldApi = {
 
 export const blockApi = {
 	getBlockTypes() {
-		return get<IBlockType>("/block/types");
+		return get<IBlockReflect>("/block/types");
+	},
+	getBlockIconUrl(blockType: string) {
+		return "";
 	},
 };

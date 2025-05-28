@@ -1,17 +1,30 @@
-import React, { RefObject, useState } from "react";
+import React, { RefObject, useEffect, useState } from "react";
 import GameUIWrapper from "./components/GameUIWrapper.tsx";
 import StartScreen from "@/ui-root/views/start-screen";
-import { useEventBus } from "@/ui-root/hooks/useEventBus.tsx";
+import { useGameStore } from "@/store";
+import Hotbar from "@/ui-root/views/hotbar";
+import Catalog from "@/ui-root/views/catalog";
+import Bag from "@/ui-root/views/bag";
 
 const GameUI: React.FC<{ canvasRef: RefObject<HTMLCanvasElement> }> = ({ canvasRef }) => {
 	const [startGame, setStartGame] = useState(false);
-	useEventBus("startGame", () => {
-		setStartGame(true);
-	});
-	useEventBus("endGame", () => {
-		setStartGame(false);
-	});
-	return <GameUIWrapper canvasRef={canvasRef}>{<StartScreen hidden={startGame} />}</GameUIWrapper>;
+	useEffect(() => {
+		useGameStore.subscribe(state => {
+			setStartGame(state.isGaming);
+		});
+	}, []);
+	return (
+		<GameUIWrapper canvasRef={canvasRef}>
+			{startGame && (
+				<div>
+					<Hotbar />
+					<Catalog />
+					<Bag rows={4} columns={4} />
+				</div>
+			)}
+			<StartScreen hidden={startGame} />
+		</GameUIWrapper>
+	);
 };
 
 export default GameUI;

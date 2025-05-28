@@ -19,9 +19,8 @@ import WorldPlayerPanel from "@/ui-root/views/start-screen/components/world-play
 
 import GameSelect from "@/ui-root/components/game-select";
 import { IWorld } from "@/api/interface.ts";
-import { usePlayerStore, useUserStore, useWorldStore } from "@/store";
+import { useGameStore, usePlayerStore, useUserStore, useWorldStore } from "@/store";
 import { playerApi, worldApi } from "@/api";
-import { gameEvents } from "@/game-root/events";
 
 const WorldManagerMenu: React.FC<{ setPage: (page: ScreenPage) => void }> = ({ setPage }) => {
 	const [worldList, setWorldList] = useState<IWorld[]>([]);
@@ -69,10 +68,14 @@ const WorldManagerMenu: React.FC<{ setPage: (page: ScreenPage) => void }> = ({ s
 			const player = await playerApi.getPlayer(world.id!);
 			useWorldStore.setState({
 				worldId: world.id!,
+			});
+			usePlayerStore.setState({
+				playerId: player.id,
+			});
+			useGameStore.setState({
+				isGaming: true,
 				gameMode: world.gameMode,
 			});
-			usePlayerStore.setState({ playerId: player.id });
-			gameEvents.emit("startGame");
 		} else {
 			setSelectedWorld(world);
 			setShowPlayerPanel(true);

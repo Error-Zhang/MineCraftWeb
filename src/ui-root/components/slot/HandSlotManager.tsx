@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { SlotType } from "@/ui-root/components/slot/index.tsx";
 import "./index.less";
-import gameStore from "@/game-root/core/GameStore.ts";
+import { useGameStore } from "@/store";
 
 // 使用更严格的类型定义
 type Position = { x: number; y: number };
@@ -112,10 +112,11 @@ export const HandSlotManager: React.FC<HandSlotManagerProps> = ({ offset = { x: 
 export const HandSlotController = {
 	setHandSlot: (slot: SlotType) => {
 		notifySubscribers(slot);
+		useGameStore.setState({ isSplitting: true });
 	},
 	clearHandSlot: () => {
 		notifySubscribers(null);
-		gameStore.set("isSplitting", false);
+		useGameStore.setState({ isSplitting: false });
 	},
 	isHolding: () => currentHandSlot !== null,
 	getHandSlot: () => currentHandSlot,

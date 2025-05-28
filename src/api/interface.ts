@@ -28,7 +28,7 @@ export interface IWorld {
 	createdAt?: string;
 }
 
-export interface IBlockType {
-	blockType: string;
-	blockId: number;
+export interface IBlockReflect {
+	byId: Record<number, string>;
+	byName: Record<string, number>;
 }

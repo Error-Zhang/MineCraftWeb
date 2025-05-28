@@ -30,9 +30,11 @@ export const blocksUvTable: Record<
 	},
 	[BlockType.WaterBlock]: {
 		regionUv: uvHelper.region([12, 10], [3, 3]),
+		faceUvs: uvHelper.uniform([12, 10]),
 	},
 	[BlockType.MagmaBlock]: {
 		regionUv: uvHelper.region([12, 7], [3, 3]),
+		faceUvs: uvHelper.uniform([12, 7]),
 	},
 	[BlockType.ClayBlock]: {
 		faceUvs: uvHelper.uniform([8, 0]),
@@ -56,7 +58,7 @@ export const blocksUvTable: Record<
 		stageUvs: Array.from({ length: 8 }).map((_, i) => uvHelper.getUV([i + 8, 5])),
 	},
 	[BlockType.CottonBlock]: {
-		stageUvs: [uvHelper.getUV([13, 0]), uvHelper.getUV([14, 0])],
+		stageUvs: [uvHelper.getUV([12, 1]), uvHelper.getUV([13, 1]), uvHelper.getUV([14, 1])],
 	},
 	[BlockType.DryBushBlock]: {
 		stageUvs: [uvHelper.getUV([7, 3])],

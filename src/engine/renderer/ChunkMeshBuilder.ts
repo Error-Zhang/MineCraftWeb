@@ -1,4 +1,4 @@
-import { Vector4, VertexData } from "@babylonjs/core";
+import { Color4, Vector4, VertexData } from "@babylonjs/core";
 import { Chunk } from "../chunk/Chunk.ts";
 import { BlockRegistry } from "@engine/block/BlockRegistry";
 import { CrossRender, CubeRender, RenderComponent, RenderMaterial } from "../types/block.type.ts";
@@ -63,15 +63,13 @@ interface MeshData {
 	indices: number[];
 	uvs: number[];
 	normals: number[];
+	colors: number[];
 	indexOffset: number;
 	material?: RenderMaterial;
 }
 
 export class ChunkMeshBuilder {
-	public static build(
-		chunk: Chunk,
-		filter?: Set<string>
-	) {
+	public static build(chunk: Chunk, filter?: Set<string>) {
 		const mergeGroups = new Map<string, MeshData>();
 		const [size, height] = [ChunkManager.ChunkSize, ChunkManager.ChunkHeight];
 		const worldX = chunk.position.x * size;
@@ -87,8 +85,6 @@ export class ChunkMeshBuilder {
 			const def = BlockRegistry.Instance.getById(blockId);
 			if (!def?.render) return;
 
-			renderedBlocks.add(key);
-
 			const posX = worldX + x;
 			const posY = y;
 			const posZ = worldZ + z;
@@ -102,8 +98,8 @@ export class ChunkMeshBuilder {
 						mergeGroups.set(matKey, this.initData());
 					}
 					const target = mergeGroups.get(matKey)!;
-					target.material = render.material;
 
+					let hasFace = false;
 					for (let i = 0; i < 6; i++) {
 						const normal = FaceDirectionOffset[i];
 						const nx = posX + normal[0];
@@ -111,15 +107,15 @@ export class ChunkMeshBuilder {
 						const nz = posZ + normal[2];
 						const neighborId = ChunkManager.getBlockAt(nx, ny, nz);
 						const neighbor = BlockRegistry.Instance.getById(neighborId);
-						const shouldRender = this.shouldRenderFace(
-							blockId,
-							neighborId,
-							render,
-							neighbor?.render!
-						);
+						let shouldRender = this.shouldRenderFace(blockId, neighborId, render, neighbor.render);
 						if (shouldRender) {
-							this.addFace(target, posX, posY, posZ, i, render.uvs[i]);
+							let surfaceColor = i === 4 ? render.material.surfaceColor : undefined;
+							this.addFace(target, posX, posY, posZ, i, render.uvs[i], surfaceColor);
+							hasFace = true;
 						}
+					}
+					if (hasFace) {
+						renderedBlocks.add(key);
 					}
 					break;
 				}
@@ -131,13 +127,22 @@ export class ChunkMeshBuilder {
 						mergeGroups.set(matKey, this.initData());
 					}
 					const target = mergeGroups.get(matKey)!;
-					target.material = render.material;
 
-					this.addCross(target, posX, posY, posZ, render.uvs[render.uvIndex]);
+					this.addCross(
+						target,
+						posX,
+						posY,
+						posZ,
+						render.uvs[render.uvIndex],
+						render.material.surfaceColor
+					);
+					renderedBlocks.add(key);
 					break;
 				}
 				case "model": {
-					modelBlocks.set(key, blockId);
+					modelBlocks.set(`${posX},${posY},${posZ}`, blockId);
+					// 模型被固体方块包围的情况过于少见，故不做处理
+					renderedBlocks.add(key);
 					break;
 				}
 			}
@@ -176,45 +181,27 @@ export class ChunkMeshBuilder {
 		currentRender: CubeRender,
 		neighborRender: RenderComponent
 	): boolean {
-		// 1. 邻居方块不存在，应该渲染
-		if (!neighborId) return true;
+		// 0. 超出范围，不渲染
+		if (neighborId === -1) return false;
+		// 1. 邻居方块空气，应该渲染
+		if (neighborId === 0) return true;
 
 		// 2. 相同方块，不渲染（避免内部面）
 		if (neighborId === currentId) return false;
 
-		// 3. 当前方块是立方体，邻居不是立方体，应该渲染
-		if (currentRender.type === "cube" && neighborRender.type !== "cube") return true;
-		if (currentRender.type === "cube" && neighborRender.type === "cube") return false;
+		// 3.邻居不是立方体，应该渲染
+		if (neighborRender.type !== "cube") return true;
 
-		// 4. 处理透明度情况
-		if (currentRender.transparencyType !== "opaque") {
-			// 4.1 当前方块透明，邻居不透明，不渲染
-			if (
-				neighborRender.type === "cube" &&
-				(neighborRender as CubeRender).transparencyType === "opaque"
-			) {
+		switch (currentRender.transparencyType) {
+			case "opaque":
+				return neighborRender.transparencyType !== "opaque";
+			case "cutout":
+				return neighborRender.transparencyType === "transparent";
+			case "transparent":
 				return false;
-			}
-			// 4.2 当前方块透明，邻居也透明，比较透明度
-			if (
-				neighborRender.type === "cube" &&
-				(neighborRender as CubeRender).transparencyType !== "opaque"
-			) {
-				// 如果邻居更透明，渲染当前面
-				return (neighborRender as CubeRender).transparencyType === "transparent";
-			}
 		}
 
-		// 5. 当前方块不透明，邻居透明，应该渲染
-		if (
-			currentRender.transparencyType === "opaque" &&
-			neighborRender.type === "cube" &&
-			(neighborRender as CubeRender).transparencyType !== "opaque"
-		) {
-			return true;
-		}
-
-		// 6. 其他情况，默认渲染
+		// 其他情况，默认渲染
 		return true;
 	}
 
@@ -224,6 +211,7 @@ export class ChunkMeshBuilder {
 			indices: [],
 			uvs: [],
 			normals: [],
+			colors: [],
 			indexOffset: 0,
 		};
 	}
@@ -234,7 +222,8 @@ export class ChunkMeshBuilder {
 		y: number,
 		z: number,
 		faceIndex: number,
-		uv: Vector4
+		uv: Vector4,
+		surfaceColor: Color4 = new Color4(1, 1, 1, 1)
 	) {
 		const vertices = FaceVertices[faceIndex];
 		const normal = FaceDirectionOffset[faceIndex];
@@ -268,9 +257,20 @@ export class ChunkMeshBuilder {
 			const v = uv.y + (uv.w - uv.y) * vRatio;
 			data.uvs.push(u, v);
 		}
+
+		for (let i = 0; i < 4; i++) {
+			data.colors.push(surfaceColor.r, surfaceColor.g, surfaceColor.b, surfaceColor.a);
+		}
 	}
 
-	private static addCross(data: MeshData, x: number, y: number, z: number, uv: Vector4) {
+	private static addCross(
+		data: MeshData,
+		x: number,
+		y: number,
+		z: number,
+		uv: Vector4,
+		surfaceColor: Color4 = new Color4(1, 1, 1, 1)
+	) {
 		const baseIndex = data.positions.length / 3;
 
 		const positions = [
@@ -321,6 +321,10 @@ export class ChunkMeshBuilder {
 				data.uvs.push(u, v);
 			}
 		}
+
+		for (let i = 0; i < 8; i++) {
+			data.colors.push(surfaceColor.r, surfaceColor.g, surfaceColor.b, surfaceColor.a);
+		}
 	}
 
 	private static createVertexData(group: MeshData): VertexData {
@@ -329,6 +333,7 @@ export class ChunkMeshBuilder {
 		vd.indices = group.indices;
 		vd.uvs = group.uvs;
 		vd.normals = group.normals;
+		vd.colors = group.colors;
 		return vd;
 	}
 }

@@ -1,173 +1,12 @@
-import { AbstractMesh, Vector3, Vector4 } from "@babylonjs/core";
-import BlockType from "./BlockType.ts";
-import {
-	BlockDefinition,
-	BlockProperties,
-	CrossRender,
-	CubeRender,
-	MaterialOptions,
-	ModelRender,
-	RenderComponent,
-	RenderMaterial,
-	TransparencyType,
-} from "@engine/types/block.type.ts";
-import BlockMeshRegistry from "@engine/block/BlockMeshRegistry.ts";
+import { BlockDefinition, TransparencyType } from "@/engine/types/block.type";
+import { BlockBuilder, TAGS } from "./BlockBuilder";
+import BlockType from "./BlockType";
+import { BlockMaterialManager } from "@/engine/renderer/BlockMaterialManager";
 import Assets from "@/game-root/assets";
-import { blocksUvTable } from "@/game-root/block-definitions/TextureAtlas.ts";
-import { BlockMaterialManager } from "@engine/renderer/BlockMaterialManager.ts";
-
-// 标签分类
-const TAGS = {
-	NATURE: {
-		TERRAIN: "地形",
-		PLANT: "植物",
-		TREE: "树木",
-		FLOWER: "花卉",
-		DECORATION: "装饰",
-	},
-	FUNCTIONAL: {
-		CRAFTING: "制作",
-		INTERACTIVE: "交互",
-		LIQUID: "液体",
-	},
-} as const;
-
-// 通用方块构造器
-class BlockBuilder {
-	private block: {
-		id?: number;
-		name: BlockType;
-		metaData: {
-			displayName: string;
-			maxStackCount?: number;
-			[key: string]: any; // 允许任意属性
-		};
-		options: {
-			properties?: Partial<BlockProperties>;
-			materialOptions?: MaterialOptions;
-		};
-		tags: string[];
-		render: RenderComponent;
-	};
-
-	constructor(type: BlockType, displayName: string, id?: number) {
-		this.block = {
-			id,
-			name: type,
-			metaData: { displayName, maxStackCount: 40 },
-			options: {},
-			tags: [],
-			render: {} as RenderComponent,
-		};
-	}
-
-	withMetaData(
-		metaData: Partial<{ displayName: string; maxStackCount: number } & Record<string, any>>
-	) {
-		this.block.metaData = { ...this.block.metaData, ...metaData };
-		return this;
-	}
-
-	withTags(...tags: string[]) {
-		this.block.tags = [...new Set([...this.block.tags, ...tags])];
-		return this;
-	}
-
-	withProperties(properties: Partial<BlockProperties>) {
-		this.block.options.properties = properties;
-		return this;
-	}
-
-	withMaterialOptions(materialOptions: MaterialOptions) {
-		this.block.options.materialOptions = materialOptions;
-		return this;
-	}
-
-	asCube(transparencyType: TransparencyType, materialKey: string) {
-		this.block.render = createCubeRender(
-			blocksUvTable[this.block.name].faceUvs!,
-			transparencyType,
-			{
-				matKey: materialKey,
-				meshProperties: { isCollision: true },
-				...this.block.options.materialOptions,
-			}
-		);
-		return this;
-	}
-
-	asCross(stage: number = 0) {
-		this.block.render = createCrossRender(blocksUvTable[this.block.name].stageUvs!, stage, {
-			matKey: BlockMaterialManager.PRESET_MATERIALS.CROSS,
-			meshProperties: { isCollision: true },
-			...this.block.options.materialOptions,
-		});
-		return this;
-	}
-
-	asModel(path: string, setMaterial: (mesh: AbstractMesh) => void) {
-		this.block.render = createModelRender(
-			path,
-			blocksUvTable[this.block.name].modelUvs!,
-			setMaterial
-		);
-		return this;
-	}
-
-	build() {
-		return this.block;
-	}
-}
-
-// 工具函数
-function createCubeRender(
-	uvs: Vector4[],
-	transparencyType: CubeRender["transparencyType"],
-	material: RenderMaterial
-): CubeRender {
-	return {
-		type: "cube",
-		uvs,
-		transparencyType,
-		material,
-	};
-}
-
-function createCrossRender(
-	uvs: Vector4[],
-	uvIndex: number = 0,
-	material: RenderMaterial
-): CrossRender {
-	return {
-		type: "cross",
-		uvs,
-		uvIndex,
-		material,
-	};
-}
-
-function createModelRender(
-	path: string,
-	uvs: Vector4[],
-	setMaterial: (mesh: AbstractMesh) => void
-): ModelRender {
-	return {
-		type: "model",
-		uvs,
-		loadModel: async (scene, position, properties) => {
-			const node = await BlockMeshRegistry.loadModel(path, scene, setMaterial);
-			node.position = position.add(new Vector3(0.5, 0, 0.5));
-			const material = properties.material as RenderMaterial;
-			if (material?.meshProperties?.isCollision) {
-				BlockMeshRegistry.attachCollider(scene, node);
-			}
-			return node;
-		},
-	};
-}
+import { Color4 } from "@babylonjs/core";
 
 // 方块定义
-const blocks: BlockDefinition<any>[] = [
+export const blocks: BlockDefinition<Record<string, any>>[] = [
 	// 基础方块
 	new BlockBuilder(BlockType.GrassBlock, "草方块", 1)
 		.withTags(TAGS.NATURE.TERRAIN)
@@ -176,6 +15,9 @@ const blocks: BlockDefinition<any>[] = [
 			maxStackCount: 64,
 			hardness: 0.6,
 			toolType: "shovel",
+		})
+		.withMaterialOptions({
+			surfaceColor: new Color4(0.4, 0.8, 0.4, 1.0),
 		})
 		.asCube(TransparencyType.Opaque, BlockMaterialManager.PRESET_MATERIALS.SOLID)
 		.build(),
@@ -261,6 +103,9 @@ const blocks: BlockDefinition<any>[] = [
 			toolType: "shears",
 			flammable: true,
 		})
+		.withMaterialOptions({
+			surfaceColor: new Color4(0.4, 0.8, 0.4, 1.0),
+		})
 		.asCross(1)
 		.build(),
 
@@ -285,7 +130,7 @@ const blocks: BlockDefinition<any>[] = [
 			damage: 1,
 			flammable: true,
 		})
-		.asModel(Assets.blocks.models.Cactus, mesh => {})
+		.asModel(Assets.blocks.models.Cactus)
 		.build(),
 
 	new BlockBuilder(BlockType.CraftTableBlock, "工作台")
@@ -297,7 +142,7 @@ const blocks: BlockDefinition<any>[] = [
 			toolType: "axe",
 			interactable: true,
 		})
-		.asModel(Assets.blocks.models.CraftTable, mesh => {})
+		.asModel(Assets.blocks.models.CraftTable)
 		.build(),
 
 	// 矿石类方块
@@ -320,7 +165,7 @@ const blocks: BlockDefinition<any>[] = [
 			hardness: 3.0,
 			toolType: "pickaxe",
 		})
-		.asCube(TransparencyType.Opaque, BlockMaterialManager.PRESET_MATERIALS.SOLID)
+		.asCube(TransparencyType.Opaque, BlockMaterialManager.PRESET_MATERIALS.METAL)
 		.build(),
 
 	new BlockBuilder(BlockType.CopperOreBlock, "铜矿")
@@ -331,7 +176,7 @@ const blocks: BlockDefinition<any>[] = [
 			hardness: 3.0,
 			toolType: "pickaxe",
 		})
-		.asCube(TransparencyType.Opaque, BlockMaterialManager.PRESET_MATERIALS.SOLID)
+		.asCube(TransparencyType.Opaque, BlockMaterialManager.PRESET_MATERIALS.METAL)
 		.build(),
 
 	new BlockBuilder(BlockType.SaltpeterOreBlock, "硝石矿")
@@ -364,7 +209,7 @@ const blocks: BlockDefinition<any>[] = [
 			hardness: 3.0,
 			toolType: "pickaxe",
 		})
-		.asCube(TransparencyType.Opaque, BlockMaterialManager.PRESET_MATERIALS.SOLID)
+		.asCube(TransparencyType.Opaque, BlockMaterialManager.PRESET_MATERIALS.METAL)
 		.build(),
 
 	new BlockBuilder(BlockType.GermaniumOreBlock, "锗矿")
@@ -375,7 +220,7 @@ const blocks: BlockDefinition<any>[] = [
 			hardness: 3.0,
 			toolType: "pickaxe",
 		})
-		.asCube(TransparencyType.Opaque, BlockMaterialManager.PRESET_MATERIALS.SOLID)
+		.asCube(TransparencyType.Opaque, BlockMaterialManager.PRESET_MATERIALS.METAL)
 		.build(),
 
 	// 石头类方块
@@ -576,7 +421,7 @@ const blocks: BlockDefinition<any>[] = [
 			toolType: "shears",
 			flammable: true,
 		})
-		.asCross(0)
+		.asCross(2)
 		.build(),
 
 	new BlockBuilder(BlockType.DryBushBlock, "干枯灌木")
@@ -639,6 +484,37 @@ const blocks: BlockDefinition<any>[] = [
 		})
 		.asCube(TransparencyType.Opaque, BlockMaterialManager.PRESET_MATERIALS.SOLID)
 		.build(),
+
+	new BlockBuilder(BlockType.OakWoodBlock, "橡树木块")
+		.withTags(TAGS.NATURE.TREE)
+		.withMetaData({
+			displayName: "橡树木块",
+			maxStackCount: 64,
+			hardness: 2.0,
+			toolType: "axe",
+			flammable: true,
+		})
+		.asCube(TransparencyType.Opaque, BlockMaterialManager.PRESET_MATERIALS.SOLID)
+		.build(),
+
+	new BlockBuilder(BlockType.BirchWoodBlock, "桦树木块")
+		.withTags(TAGS.NATURE.TREE)
+		.withMetaData({
+			displayName: "桦树木块",
+			maxStackCount: 64,
+			hardness: 2.0,
+			toolType: "axe",
+			flammable: true,
+		})
+		.asCube(TransparencyType.Opaque, BlockMaterialManager.PRESET_MATERIALS.SOLID)
+		.build(),
 ];
 
-export default blocks;
+export const getBlocksMap = () =>
+	blocks.reduce(
+		(acc, cur) => {
+			acc[cur.blockType] = cur;
+			return acc;
+		},
+		{} as Record<string, BlockDefinition<any>>
+	);

@@ -20,8 +20,11 @@ class BlockMeshRegistry {
 			mesh.setParent(root);
 			setMaterial(mesh);
 		}
+		// 防止坐标原点出现模型实体
+		root.setEnabled(false);
 
 		this.meshes.set(modelPath, root);
+		// 返回克隆体防止本体被摧毁后所有克隆体全部消失
 		return root.clone(modelPath, null)!;
 	}
 

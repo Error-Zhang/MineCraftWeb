@@ -1,34 +1,33 @@
 import React, { useEffect } from "react";
 import GameWindow from "@/game-root/core/GameWindow.ts";
-import { gameEventBus } from "@/game-root/core/GameEventBus.ts";
-import { GameEvents } from "@/game-root/core/GameEvents.ts";
 
 type KeyBinding = string | string[];
 
 /**
  * 监听键盘按键按下，触发回调
- * @param game
  * @param keys 监听的键或键数组（不区分大小写）
  * @param onToggle 触发回调函数
  * @param qkeys
  * @param onEscape
+ * @param isToggle
  */
 export function useToggle(
-	game: GameWindow,
 	keys: KeyBinding,
 	onToggle: () => void,
 	qkeys: KeyBinding,
-	onEscape: () => void
+	onEscape: () => void,
+	isToggle?: () => boolean
 ) {
 	useEffect(() => {
+		if (isToggle && !isToggle()) return;
+
 		const handleKeyDown = (e: KeyboardEvent) => {
 			const pressedKey = e.key.toLowerCase();
 
-			// Convert keys to array if it's a string
 			const keyArray = Array.isArray(keys) ? keys : [keys];
 			const qkeyArray = Array.isArray(qkeys) ? qkeys : [qkeys];
+			const game = GameWindow.Instance;
 
-			// Check if pressed key matches any of the target keys
 			if (game.isInGame && keyArray.some(key => key.toLowerCase() === pressedKey)) {
 				onToggle();
 				game.togglePointerLock();
@@ -46,13 +45,11 @@ export function useToggle(
 }
 
 export function useToggleActive(
-	game: GameWindow,
 	setIsActive: React.Dispatch<React.SetStateAction<boolean>>,
 	keys: KeyBinding,
-	onClose?: () => void
+	isToggle?: () => boolean
 ) {
 	useToggle(
-		game,
 		keys,
 		() => {
 			setIsActive(true);
@@ -60,13 +57,7 @@ export function useToggleActive(
 		keys,
 		() => {
 			setIsActive(false);
-			onClose?.();
-		}
+		},
+		isToggle
 	);
-
-	useEffect(() => {
-		const cb = () => setIsActive(false);
-		gameEventBus.on(GameEvents.hiddenPanel, cb);
-		return () => gameEventBus.off(GameEvents.hiddenPanel, cb);
-	}, [setIsActive]);
 }

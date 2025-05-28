@@ -44,6 +44,8 @@ export const waterFragmentShader = `
 
     uniform sampler2D diffuseSampler;
     uniform float time;
+    uniform vec3 waterColor;
+    uniform float alpha;
 
     void main(void) {
         // 基础颜色
@@ -60,6 +62,12 @@ export const waterFragmentShader = `
         // 合并效果
         color.rgb *= (0.5 + 0.5 * diffuse);
         color.rgb += rim * 0.2;
+        
+        // 应用水的颜色
+        color.rgb *= waterColor;
+        
+        // 设置透明度
+        color.a = alpha;
         
         gl_FragColor = color;
     }

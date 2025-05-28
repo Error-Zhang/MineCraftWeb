@@ -10,7 +10,7 @@ import { ChunkManager } from "../chunk/ChunkManager.ts";
 export class ChunkRenderer {
 	private root: TransformNode;
 	private modelInstances: Map<string, TransformNode> = new Map();
-	private renderedBlocks: Set<string> = new Set();
+	private renderedBlocks: Set<string> = new Set(); // 区块内部坐标
 
 	constructor(
 		public scene: Scene,
@@ -24,12 +24,10 @@ export class ChunkRenderer {
 		);
 	}
 
-	public update(positions: Position[] | Position) {
+	public update(positions: Position[]) {
 		const toUpdate = this.renderedBlocks;
-
-		for (const pos of Array.isArray(positions) ? positions : [positions]) {
-			const key = `${pos.x},${pos.y},${pos.z}`;
-			toUpdate.add(key);
+		for (const pos of positions) {
+			toUpdate.add(`${pos.x},${pos.y},${pos.z}`);
 
 			for (const [dx, dy, dz] of FaceDirectionOffset) {
 				const nk = `${pos.x + dx},${pos.y + dy},${pos.z + dz}`;
@@ -37,11 +35,11 @@ export class ChunkRenderer {
 			}
 		}
 		if (!toUpdate.size) return;
-		this.dispose();
 		this.build(toUpdate);
 	}
 
 	public build(filter?: Set<string>) {
+		this.root.dispose();
 		const { meshGroups, modelBlocks, renderedBlocks } = ChunkMeshBuilder.build(this.chunk, filter);
 		this.renderedBlocks = renderedBlocks;
 
@@ -51,17 +49,39 @@ export class ChunkRenderer {
 			this.createMesh(matKey, vertexData, material);
 		}
 
-		this.buildModelBlocks(modelBlocks);
+		if (!filter) {
+			this.buildModelBlocks(modelBlocks);
+		}
 	}
 
+	// bugfix:如果你在某天发现本应该被销毁的网格回到了世界原点，那一定是dispose出了问题
 	public dispose() {
+		this.modelInstances.forEach(modelInstance => {
+			modelInstance.dispose();
+		});
 		this.modelInstances.clear();
-		// bugfix:如果你在某天发现本应该被销毁的网格回到了世界原点，那一定是dispose出了问题
 		this.root.dispose();
 	}
 
 	public setEnabled(enabled: boolean) {
+		this.modelInstances.forEach(modelInstance => {
+			modelInstance.setEnabled(enabled);
+		});
 		this.root.setEnabled(enabled);
+	}
+
+	public async addModelBlock(posKey: string, blockId: number) {
+		const [x, y, z] = posKey.split(",").map(Number);
+		const def = BlockRegistry.Instance.getById(blockId)!;
+		const render = <ModelRender>def.render;
+		const model = await render.loadModel(this.scene, new Vector3(x, y, z));
+		model.metadata = { blockId };
+		this.modelInstances.set(posKey, model);
+	}
+
+	public removeModelBlock(posKey: string) {
+		this.modelInstances.get(posKey)?.dispose();
+		this.modelInstances.delete(posKey);
 	}
 
 	private createMesh(name: string, vertexData: VertexData, material: Material): Mesh {
@@ -93,7 +113,7 @@ export class ChunkRenderer {
 		// 1. 清理旧模型（位置不存在或 ID 已变）
 		for (const [key, instance] of this.modelInstances.entries()) {
 			const newId = modelBlocks.get(key);
-			const oldId = instance.metadata._blockId as number;
+			const oldId = instance.metadata.blockId as number;
 
 			if (!newId || oldId !== newId) {
 				instance.dispose();
@@ -103,21 +123,9 @@ export class ChunkRenderer {
 
 		// 2. 添加或更新模型
 		for (const [posKey, blockId] of modelBlocks.entries()) {
-			if (this.modelInstances.has(posKey)) {
-				continue;
+			if (!this.modelInstances.has(posKey)) {
+				this.addModelBlock(posKey, blockId);
 			}
-
-			const [x, y, z] = posKey.split(",").map(Number);
-			const def = BlockRegistry.Instance.getById(blockId)!;
-			const model = await (<ModelRender>def.render).loadModel(
-				this.scene,
-				new Vector3(x, y, z),
-				def.properties!
-			);
-			model.setParent(this.root);
-
-			model.metadata._blockId = blockId;
-			this.modelInstances.set(posKey, model);
 		}
 	}
 }

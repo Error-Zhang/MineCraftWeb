@@ -1,15 +1,10 @@
-import React, { useEffect, useState } from "react";
-import blockFactory from "@/block/core/BlockFactory.ts";
+import React, { useState } from "react";
 import CraftingPanel from "@/ui-root/views/craft-table/CraftingPanel.tsx";
-import { Blocks } from "@/block/core/Blocks.ts";
-import { BlockRecipe } from "@/block/core/BlockTypes.ts";
+import BlockType from "@/game-root/block-definitions/BlockType.ts";
+import { BlockRecipe } from "@/game-root/block-definitions/BlockRecipes.ts";
 
 const CraftTable: React.FC<{ guid: string }> = ({ guid }) => {
-	const [recipes, setRecipes] = useState<Record<Blocks, BlockRecipe[]>>({} as any);
-
-	useEffect(() => {
-		setRecipes(blockFactory.getAllBlockRecipes());
-	}, []);
+	const [recipes, setRecipes] = useState<Record<BlockType, BlockRecipe[]>>({} as any);
 
 	return <CraftingPanel title="工作台" guid={guid} rows={3} columns={3} recipes={recipes} />;
 };

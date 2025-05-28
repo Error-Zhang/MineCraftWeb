@@ -8,7 +8,8 @@ import { GameTime } from "../systems/GameTime";
  */
 class Sky {
 	public static readonly Size: number = 1024;
-	public static readonly MinUpdateDistance = this.Size * 0.8;
+	// 半径
+	public static readonly MinUpdateDistance = this.Size * 0.4;
 
 	private readonly scene: Scene;
 	private readonly skyBox: Mesh;

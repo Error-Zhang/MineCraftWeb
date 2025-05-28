@@ -1,22 +1,67 @@
-import { Color3, Material, Scene, ShaderMaterial, StandardMaterial, Texture } from "@babylonjs/core";
+import { Color3, Material, PBRMaterial, Scene, ShaderMaterial, StandardMaterial, Texture } from "@babylonjs/core";
 
 /** 材质文档
- * https://doc.babylonjs.com/features/featuresDeepDive/materials/
+ * https://doc.babylonjs.com/features/featuresDeepDive/materials/using/pbrMaterials
  */
+
+/** Shader配置接口 */
+interface ShaderConfig {
+	/** 顶点着色器名称或代码 */
+	vertex: string;
+	/** 片段着色器名称或代码 */
+	fragment: string;
+	/** 着色器属性列表 */
+	attributes?: string[];
+	/** 着色器uniform变量列表 */
+	uniforms?: string[];
+	/** 自定义uniform变量值 */
+	customUniforms?: Record<string, any>;
+	/** 是否需要动画更新 */
+	needAnimation?: boolean;
+	/** 动画更新回调函数 */
+	onAnimationUpdate?: (material: ShaderMaterial, deltaTime: number) => void;
+}
+
+/** 材质创建配置接口 */
+interface MaterialCreationConfig {
+	/** 纹理键，用于从纹理缓存中获取对应的纹理 */
+	textureKey?: string;
+	/** 基础颜色，影响材质的整体色调 */
+	color: Color3;
+	/** 自发光颜色，使材质在暗处也能发光 */
+	emissive: Color3;
+	/** 金属度，影响材质的金属感，0-1之间，值越大金属感越强 */
+	metallic: number;
+	/** 粗糙度，影响材质的反光程度，0-1之间，值越大越粗糙 */
+	roughness: number;
+	/** 透明度，0完全透明，1完全不透明 */
+	alpha: number;
+	/** 透明度阈值，低于此值的像素会被完全剔除 */
+	alphaCutOff: number;
+	/** 背面剔除，true时背面不可见，false时双面可见 */
+	backFaceCulling: boolean;
+	/** 高光颜色，影响材质反光时的颜色 */
+	specular: Color3;
+	/** 环境光强度，影响环境光对材质的影响程度，值越大环境光影响越强 */
+	environmentIntensity: number;
+	/** 是否使用物理光照衰减，开启后光照会随距离衰减 */
+	usePhysicalLightFalloff: boolean;
+}
 
 export interface MaterialConfig {
 	textureKey?: string;
 	color?: Color3;
 	emissive?: Color3;
-	specular?: Color3;
+	metallic?: number;
 	roughness?: number;
 	alpha?: number;
+	alphaCutOff?: number;
 	backFaceCulling?: boolean;
-	customShader?: {
-		vertex: string;
-		fragment: string;
-		uniforms?: Record<string, any>;
-	};
+	environmentIntensity?: number;
+	usePhysicalLightFalloff?: boolean;
+	specular?: Color3;
+	/** 自定义着色器配置 */
+	shader?: ShaderConfig;
 	meshProperties?: {
 		isPickable?: boolean;
 		checkCollisions?: boolean;
@@ -37,9 +82,7 @@ export class BlockTextureManager {
 				 * 5：采样方法：最近点采样（nearest）NEAREST_NEAREST 或 NEAREST_NEAREST_MIPNEAREST (开启mipMap使用)直接精确采样像素防止模糊（mc首选）
 				 */
 				let texture = new Texture(path, scene, false, false, Texture.NEAREST_NEAREST_MIPNEAREST);
-				// 防止边框出现白线(UV 坐标超出 0~1 范围时，取边缘像素的颜色)
-				texture.wrapU = Texture.CLAMP_ADDRESSMODE;
-				texture.wrapV = Texture.CLAMP_ADDRESSMODE;
+				texture.hasAlpha = true;
 
 				this.textureCache.set(key, texture);
 			}
@@ -58,13 +101,13 @@ export class BlockMaterialManager {
 	// 预设材质类型
 	static readonly PRESET_MATERIALS = {
 		SOLID: "solid",
-		TRANSPARENT: "transparent",
 		WATER: "water",
 		LAVA: "lava",
 		LEAVES: "leaves",
 		GLASS: "glass",
 		CROSS: "cross",
-		CUSTOM: "custom",
+		MODEL: "model",
+		METAL: "metal",
 	} as const;
 	private static materialCache: Map<string, Material> = new Map();
 	private static materialPresets: Map<string, MaterialConfig> = new Map();
@@ -75,85 +118,100 @@ export class BlockMaterialManager {
 		this.registerMaterialPreset(this.PRESET_MATERIALS.SOLID, {
 			alpha: 1,
 			backFaceCulling: true,
-			roughness: 0.7,
-			meshProperties: {
-				isPickable: true,
-				checkCollisions: true,
-				isVisible: true,
-			},
+			roughness: 0.8,
 		});
 
-		// 透明方块材质
-		this.registerMaterialPreset(this.PRESET_MATERIALS.TRANSPARENT, {
-			alpha: 0.5,
+		// 金属材质
+		this.registerMaterialPreset(this.PRESET_MATERIALS.METAL, {
+			alpha: 1,
 			backFaceCulling: true,
-			roughness: 0.3,
-			meshProperties: {
-				isPickable: true,
-				checkCollisions: true,
-				isVisible: true,
-			},
+			roughness: 0.2,
+			environmentIntensity: 1,
+			emissive: new Color3(0.01, 0.01, 0.01),
+		});
+
+		// 模型方块材质
+		this.registerMaterialPreset(this.PRESET_MATERIALS.MODEL, {
+			alpha: 1,
+			backFaceCulling: true,
+			roughness: 0.5,
+			alphaCutOff: 0.5,
 		});
 
 		// 水材质
 		this.registerMaterialPreset(this.PRESET_MATERIALS.WATER, {
-			alpha: 0.8,
-			backFaceCulling: false,
-			customShader: {
+			backFaceCulling: true,
+			shader: {
 				vertex: "water",
 				fragment: "water",
-				uniforms: {
+				uniforms: ["waveHeight", "waveSpeed", "waterColor", "alpha", "time"],
+				customUniforms: {
 					waveHeight: 0.1,
 					waveSpeed: 1.0,
+					waterColor: [0.4, 0.8, 0.8],
+					alpha: 0.6,
+					time: 0,
 				},
+				needAnimation: true,
+				onAnimationUpdate: (() => {
+					let materialTime = 0;
+					return (material: ShaderMaterial, deltaTime: number) => {
+						materialTime += deltaTime;
+						material.setFloat("time", materialTime);
+					};
+				})(),
 			},
 			meshProperties: {
-				isPickable: true,
+				isPickable: false,
 				checkCollisions: false,
-				isVisible: true,
 			},
 		});
 
 		// 岩浆材质
 		this.registerMaterialPreset(this.PRESET_MATERIALS.LAVA, {
-			alpha: 0.9,
-			backFaceCulling: false,
-			customShader: {
+			backFaceCulling: true,
+			shader: {
 				vertex: "lava",
 				fragment: "lava",
-				uniforms: {
+				uniforms: ["flowSpeed", "glowIntensity", "time"],
+				customUniforms: {
 					flowSpeed: 0.5,
 					glowIntensity: 0.8,
+					time: 0,
 				},
+				needAnimation: true,
+				onAnimationUpdate: (() => {
+					let materialTime = 0;
+					return (material: ShaderMaterial, deltaTime: number) => {
+						materialTime += deltaTime;
+						material.setFloat("time", materialTime);
+					};
+				})(),
 			},
 			meshProperties: {
-				isPickable: true,
+				isPickable: false,
 				checkCollisions: false,
-				isVisible: true,
 			},
 		});
 
 		// 树叶材质
 		this.registerMaterialPreset(this.PRESET_MATERIALS.LEAVES, {
-			alpha: 0.9,
+			color: Color3.Green(),
+			alphaCutOff: 0.5,
 			backFaceCulling: false,
-			roughness: 0.4,
+			roughness: 0.8,
 			meshProperties: {
-				isPickable: true,
 				checkCollisions: false,
-				isVisible: true,
 			},
 		});
 
 		// 玻璃材质
 		this.registerMaterialPreset(this.PRESET_MATERIALS.GLASS, {
-			alpha: 0.3,
+			alphaCutOff: 0.5,
 			backFaceCulling: false,
 			roughness: 0.1,
 			meshProperties: {
-				isPickable: true,
 				checkCollisions: true,
-				isVisible: true,
 			},
 		});
 
@@ -162,10 +220,10 @@ export class BlockMaterialManager {
 			alpha: 1,
 			backFaceCulling: false,
 			roughness: 0.8,
+			alphaCutOff: 0.5,
 			meshProperties: {
 				isPickable: true,
 				checkCollisions: false,
-				isVisible: true,
 			},
 		});
 	}
@@ -180,74 +238,43 @@ export class BlockMaterialManager {
 		return this.materialPresets.get(key);
 	}
 
-	// 创建材质
 	static createMaterial(scene: Scene, config: MaterialConfig): Material {
 		const {
 			color = new Color3(1, 1, 1),
 			emissive = new Color3(0, 0, 0),
-			specular = new Color3(0.2, 0.2, 0.2),
+			metallic = 0,
 			roughness = 0.5,
 			textureKey,
 			alpha = 1,
 			backFaceCulling = true,
-			customShader,
-			meshProperties,
-			shadowProperties,
+			shader,
+			alphaCutOff = 0,
+			specular = new Color3(1, 1, 1),
+			environmentIntensity = 1,
+			usePhysicalLightFalloff = false,
 		} = config;
 
-		let material: Material;
-
-		if (customShader) {
-			const shaderMaterial = new ShaderMaterial(
-				"customShaderMaterial",
-				scene,
-				{
-					vertex: customShader.vertex,
-					fragment: customShader.fragment,
-				},
-				{
-					attributes: ["position", "normal", "uv"],
-					uniforms: [
-						"world",
-						"worldView",
-						"worldViewProjection",
-						...Object.keys(customShader.uniforms || {}),
-					],
-				}
-			);
-
-			if (customShader.uniforms) {
-				for (const [key, value] of Object.entries(customShader.uniforms)) {
-					shaderMaterial.setFloat(key, value);
-				}
-			}
-
-			const texture = BlockTextureManager.getTexture(textureKey);
-			shaderMaterial.setTexture("diffuseSampler", texture);
-
-			shaderMaterial.alpha = alpha;
-			shaderMaterial.backFaceCulling = backFaceCulling;
-			material = shaderMaterial;
-		} else {
-			const standardMaterial = new StandardMaterial("standardMaterial", scene);
-			const texture = BlockTextureManager.getTexture(textureKey);
-			standardMaterial.diffuseTexture = texture;
-			standardMaterial.diffuseColor = color;
-			standardMaterial.emissiveColor = emissive;
-			standardMaterial.specularColor = specular;
-			standardMaterial.roughness = roughness;
-			standardMaterial.alpha = alpha;
-			standardMaterial.backFaceCulling = backFaceCulling;
-			material = standardMaterial;
+		if (shader) {
+			return this.createShaderMaterial(scene, {
+				textureKey,
+				backFaceCulling,
+				shader,
+			});
 		}
 
-		// 存储网格属性和阴影属性到材质的元数据中
-		(material as any).metadata = {
-			meshProperties,
-			shadowProperties,
-		};
-
-		return material;
+		return this.createPBRMaterial(scene, {
+			textureKey,
+			color,
+			emissive,
+			metallic,
+			roughness,
+			alpha,
+			alphaCutOff,
+			backFaceCulling,
+			specular,
+			environmentIntensity,
+			usePhysicalLightFalloff,
+		});
 	}
 
 	// 获取材质（带缓存）
@@ -262,28 +289,142 @@ export class BlockMaterialManager {
 	}
 
 	// 根据材质键获取材质
-	static getMaterialByKey(scene: Scene, matKey: string, textureKey: string = ""): Material {
+	static getMaterialByKey(scene: Scene, matKey: string): Material {
 		const presetConfig = this.getMaterialPreset(matKey);
 
 		if (!presetConfig) {
 			throw new Error(`No material preset found for key: ${matKey}`);
 		}
 
-		const config: MaterialConfig = {
-			...presetConfig,
-			textureKey,
-		};
-
-		return this.getMaterial(scene, `${textureKey}-${matKey}`, config);
+		return this.getMaterial(scene, matKey, presetConfig);
 	}
 
 	// 注册自定义材质
 	static registerCustomMaterial(key: string, config: MaterialConfig) {
+		if (this.materialCache.has(key)) {
+			throw new Error(`material key ${key} already exists`);
+		}
 		this.registerMaterialPreset(key, config);
 	}
 
 	// 清除材质缓存
 	static clearCache() {
 		this.materialCache.clear();
+	}
+
+	// 创建Shader材质
+	private static createShaderMaterial(
+		scene: Scene,
+		config: {
+			textureKey?: string;
+			backFaceCulling: boolean;
+			shader: ShaderConfig;
+		}
+	): Material {
+		const shaderMaterial = new ShaderMaterial(
+			"customShaderMaterial",
+			scene,
+			{
+				vertex: config.shader.vertex,
+				fragment: config.shader.fragment,
+			},
+			{
+				attributes: config.shader.attributes || ["position", "normal", "uv"],
+				uniforms: [
+					"world",
+					"worldView",
+					"worldViewProjection",
+					"time",
+					...(config.shader.uniforms || []),
+				],
+			}
+		);
+
+		// 设置基础属性
+		shaderMaterial.backFaceCulling = config.backFaceCulling;
+		shaderMaterial.needAlphaBlending = () => true;
+
+		// 设置纹理
+		if (config.textureKey) {
+			const texture = BlockTextureManager.getTexture(config.textureKey);
+			shaderMaterial.setTexture("diffuseSampler", texture);
+		}
+
+		// 设置自定义uniform变量
+		if (config.shader.customUniforms) {
+			for (const [key, value] of Object.entries(config.shader.customUniforms)) {
+				if (Array.isArray(value) && value.length === 3) {
+					// 如果是颜色数组，转换为Color3
+					shaderMaterial.setColor3(key, new Color3(value[0], value[1], value[2]));
+				} else if (typeof value === "number") {
+					shaderMaterial.setFloat(key, value);
+				} else if (value instanceof Color3) {
+					shaderMaterial.setColor3(key, value);
+				}
+			}
+		}
+
+		// 如果需要动画更新
+		if (config.shader.needAnimation) {
+			// 为每个材质创建独立的时间变量
+			let materialTime = 0;
+
+			const observer = scene.onBeforeRenderObservable.add(() => {
+				const deltaTime = scene.getEngine().getDeltaTime() / 1000;
+				materialTime += deltaTime;
+
+				// 设置材质特定的时间uniform
+				shaderMaterial.setFloat("time", materialTime);
+
+				// 调用自定义动画更新函数
+				if (config.shader.onAnimationUpdate) {
+					config.shader.onAnimationUpdate(shaderMaterial, deltaTime);
+				}
+			});
+
+			// 在材质销毁时移除观察者
+			shaderMaterial.onDisposeObservable.add(() => {
+				scene.onBeforeRenderObservable.remove(observer);
+			});
+		}
+
+		return shaderMaterial;
+	}
+
+	// 创建标准材质
+	private static createStandardMaterial(scene: Scene, config: MaterialCreationConfig): Material {
+		const standardMaterial = new StandardMaterial("standardMaterial", scene);
+		const texture = BlockTextureManager.getTexture(config.textureKey);
+
+		standardMaterial.diffuseTexture = texture;
+		standardMaterial.alpha = config.alpha;
+		standardMaterial.alphaCutOff = config.alphaCutOff;
+		standardMaterial.separateCullingPass = true;
+		standardMaterial.diffuseColor = config.color;
+		standardMaterial.emissiveColor = config.emissive;
+		standardMaterial.specularColor = config.specular;
+		standardMaterial.roughness = config.roughness;
+		standardMaterial.backFaceCulling = config.backFaceCulling;
+
+		return standardMaterial;
+	}
+
+	// 创建PBR材质
+	private static createPBRMaterial(scene: Scene, config: MaterialCreationConfig): Material {
+		const pbrMaterial = new PBRMaterial("pbrMaterial", scene);
+		const texture = BlockTextureManager.getTexture(config.textureKey);
+
+		pbrMaterial.albedoTexture = texture;
+		pbrMaterial.alpha = config.alpha;
+		pbrMaterial.alphaCutOff = config.alphaCutOff;
+		pbrMaterial.albedoColor = config.color;
+		pbrMaterial.emissiveColor = config.emissive;
+		pbrMaterial.roughness = config.roughness;
+		pbrMaterial.metallic = config.metallic;
+		pbrMaterial.backFaceCulling = config.backFaceCulling;
+		pbrMaterial.environmentIntensity = config.environmentIntensity;
+		pbrMaterial.usePhysicalLightFalloff = config.usePhysicalLightFalloff;
+
+		return pbrMaterial;
 	}
 }

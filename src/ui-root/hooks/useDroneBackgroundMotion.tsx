@@ -8,7 +8,7 @@ interface DroneMotionOptions {
 	minDistance?: number; // 最小移动距离百分比
 }
 
-export function useDroneBackgroundMotion(options: DroneMotionOptions = {}) {
+export function useDroneBackgroundMotion(open: boolean, options: DroneMotionOptions = {}) {
 	const {
 		speed = 0.005,
 		zoomMin = 100,
@@ -19,6 +19,7 @@ export function useDroneBackgroundMotion(options: DroneMotionOptions = {}) {
 
 	const ref = useRef<HTMLDivElement>(null);
 	const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+	const animationFrameRef = useRef<number>();
 
 	useEffect(() => {
 		const updateSize = () => {
@@ -70,6 +71,8 @@ export function useDroneBackgroundMotion(options: DroneMotionOptions = {}) {
 		};
 
 		const update = () => {
+			if (!open) return;
+
 			time += 0.016;
 			// 如果 time 太大了，就重置为等价值，保持周期连续
 			if (time > 1e6) {
@@ -100,12 +103,26 @@ export function useDroneBackgroundMotion(options: DroneMotionOptions = {}) {
 				ref.current.style.backgroundSize = `${currentZoom}%`;
 			}
 
-			requestAnimationFrame(update);
+			animationFrameRef.current = requestAnimationFrame(update);
 		};
 
-		getNewTargetPosition();
-		requestAnimationFrame(update);
-	}, []);
+		if (open) {
+			getNewTargetPosition();
+			animationFrameRef.current = requestAnimationFrame(update);
+		} else {
+			// 当关闭时，重置到初始状态
+			if (ref.current) {
+				ref.current.style.backgroundPosition = "0% 0%";
+				ref.current.style.backgroundSize = `${zoomMin}%`;
+			}
+		}
+
+		return () => {
+			if (animationFrameRef.current) {
+				cancelAnimationFrame(animationFrameRef.current);
+			}
+		};
+	}, [open, speed, zoomMin, zoomMax, zoomSpeed, minDistance]);
 
 	return ref;
 }

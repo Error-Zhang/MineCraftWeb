@@ -6,7 +6,7 @@ import { BlockEntity } from "@engine/types/block.type.ts";
 export class Chunk {
 	public readonly position: { x: number; z: number };
 
-	public blocks: Uint16Array;
+	public blocks: Uint16Array; // 最多支持65536种不同方块
 	// 该属性影响是否需要重新渲染
 	public isDirty: boolean = false;
 	// 该属性影响是否渲染
@@ -34,7 +34,7 @@ export class Chunk {
 	}
 
 	public getBlock(x: number, y: number, z: number): number {
-		if (!this.isInBounds(x, y, z)) return 0; // 默认返回空气
+		if (!this.isInBounds(x, y, z)) return -1;
 		return this.blocks[this.index(x, y, z)];
 	}
 

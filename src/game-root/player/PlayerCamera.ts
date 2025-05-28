@@ -1,22 +1,14 @@
 import { FreeCamera, Scene, Vector3 } from "@babylonjs/core";
-import GameWindow from "@/game-root/core/GameWindow.ts";
 import { usePlayerStore } from "@/store";
+import { PlayerInputSystem } from "@/game-root/player/PlayerInputSystem.ts";
 
-export class PlayerCamera {
-	readonly speed: number = 0.3; // Minecraft 风格的移动速度
-	private readonly scene: Scene;
-	private readonly vector: { x: number; y: number; z: number };
-	private readonly camera: FreeCamera;
-	private moveValue = { x: 0, y: 0, z: 0 };
-	private moveFlags = {
-		forward: false,
-		back: false,
-		left: false,
-		right: false,
-		up: false,
-		down: false,
-		sprint: false,
-	};
+// 基础相机类
+export abstract class BasePlayerCamera {
+	protected readonly scene: Scene;
+	protected readonly vector: { x: number; y: number; z: number };
+	protected readonly camera: FreeCamera;
+	protected readonly inputSystem: PlayerInputSystem;
+	protected moveValue = { x: 0, y: 0, z: 0 };
 
 	constructor(scene: Scene, canvas: HTMLCanvasElement) {
 		this.scene = scene;
@@ -27,18 +19,15 @@ export class PlayerCamera {
 			this.scene
 		);
 		this.camera.minZ = 0.1;
-		this.camera.checkCollisions = true;
-		this.camera.applyGravity = true;
-		this.camera.inertia = 0.6;
-		this.camera.speed = 0.6;
-		this.camera.setTarget(new Vector3(0, this.vector.y, 0));
 		this.camera.attachControl(canvas, true);
-		this.bindInput(GameWindow.getInstance(canvas));
+		this.inputSystem = PlayerInputSystem.Instance;
+
+		this.initCamera();
+		this.bindInput();
+
 		this.scene.onBeforeRenderObservable.add(() => {
 			this.update();
-			if (Object.values(this.moveFlags).find(flag => flag)) {
-				usePlayerStore.setState({ position: this.vector });
-			}
+			usePlayerStore.setState({ position: this.vector });
 		});
 	}
 
@@ -56,33 +45,21 @@ export class PlayerCamera {
 		return null;
 	}
 
-	private bindInput(gameWindow: GameWindow) {
-		gameWindow.addEventListener("keydown", (e: KeyboardEvent) => {
-			this.setFlag(e.code, true);
-		});
-		gameWindow.addEventListener("keyup", (e: KeyboardEvent) => {
-			this.setFlag(e.code, false);
-		});
+	protected initCamera(): void {
+		this.camera.inertia = 0.6;
+		this.camera.speed = 0.6;
+		this.camera.setTarget(new Vector3(0, this.vector.y, 0));
 	}
 
-	private update(): void {
-		// 计算移动速度倍率
-		const speedMultiplier = this.moveFlags.sprint ? 2 : 1;
+	protected bindInput(): void {
+		// 移动控制
+		this.inputSystem.onActionUpdate("moveForward", () => this.moveFront());
+		this.inputSystem.onActionUpdate("moveBackward", () => this.moveBack());
+		this.inputSystem.onActionUpdate("moveLeft", () => this.moveLeft());
+		this.inputSystem.onActionUpdate("moveRight", () => this.moveRight());
+	}
 
-		// 水平移动
-		if (this.moveFlags.forward) this.moveFront();
-		if (this.moveFlags.left) this.moveLeft();
-		if (this.moveFlags.back) this.moveBack();
-		if (this.moveFlags.right) this.moveRight();
-
-		// 垂直移动
-		if (this.moveFlags.up) {
-			this.moveValue.y += this.speed * speedMultiplier;
-		}
-		if (this.moveFlags.down) {
-			this.moveValue.y -= this.speed * speedMultiplier;
-		}
-
+	protected update(): void {
 		// 应用移动
 		this.camera.position.addInPlace(
 			new Vector3(this.moveValue.x, this.moveValue.y, this.moveValue.z)
@@ -97,53 +74,102 @@ export class PlayerCamera {
 		this.moveValue = { x: 0, y: 0, z: 0 };
 	}
 
-	private moveFront(): void {
+	protected abstract getMoveSpeed(): number;
+
+	protected moveFront(): void {
 		this.moveByDirection(this.camera.getDirection(Vector3.Forward()));
 	}
 
-	private moveBack(): void {
+	protected moveBack(): void {
 		this.moveByDirection(this.camera.getDirection(Vector3.Forward().scale(-1)));
 	}
 
-	private moveLeft(): void {
+	protected moveLeft(): void {
 		this.moveByDirection(this.camera.getDirection(Vector3.Right().scale(-1)));
 	}
 
-	private moveRight(): void {
+	protected moveRight(): void {
 		this.moveByDirection(this.camera.getDirection(Vector3.Right()));
 	}
 
-	private moveByDirection(direction: Vector3): void {
-		const speedMultiplier = this.moveFlags.sprint ? 2 : 1;
-		const move = this.speed * speedMultiplier;
+	protected moveByDirection(direction: Vector3): void {
+		const speedMultiplier = this.inputSystem.isActionActive("sprint") ? 2 : 1;
+		const move = this.getMoveSpeed() * speedMultiplier;
 		const dir = direction.normalize().scale(move);
 		this.moveValue.x += dir.x;
 		this.moveValue.z += dir.z;
 	}
+}
 
-	private setFlag(code: string, state: boolean) {
-		switch (code) {
-			case "KeyW":
-				this.moveFlags.forward = state;
-				break;
-			case "KeyA":
-				this.moveFlags.left = state;
-				break;
-			case "KeyS":
-				this.moveFlags.back = state;
-				break;
-			case "KeyD":
-				this.moveFlags.right = state;
-				break;
-			case "Space":
-				this.moveFlags.up = state;
-				break;
-			case "ShiftLeft":
-				this.moveFlags.down = state;
-				break;
-			case "ControlLeft":
-				this.moveFlags.sprint = state;
-				break;
+// 生存模式相机
+export class SurvivalCamera extends BasePlayerCamera {
+	private readonly jumpForce = 0.3;
+	private isGrounded = true;
+	private verticalVelocity = 0;
+	private readonly gravity = 0.02;
+
+	protected initCamera(): void {
+		super.initCamera();
+		this.camera.checkCollisions = true;
+		this.camera.applyGravity = true;
+	}
+
+	protected bindInput(): void {
+		super.bindInput();
+
+		// 跳跃
+		this.inputSystem.onActionStart("jump", () => {
+			if (this.isGrounded) {
+				this.verticalVelocity = this.jumpForce;
+				this.isGrounded = false;
+			}
+		});
+	}
+
+	protected update(): void {
+		// 应用重力
+		if (!this.isGrounded) {
+			this.verticalVelocity -= this.gravity;
+			this.moveValue.y += this.verticalVelocity;
+
+			// 检查是否着地
+			if (this.camera.position.y <= 0) {
+				this.camera.position.y = 0;
+				this.verticalVelocity = 0;
+				this.isGrounded = true;
+			}
 		}
+
+		super.update();
+	}
+
+	protected getMoveSpeed(): number {
+		return 0.1; // 生存模式移动速度
+	}
+}
+
+// 创造模式相机
+export class CreativeCamera extends BasePlayerCamera {
+	protected initCamera(): void {
+		super.initCamera();
+		this.camera.checkCollisions = false;
+		this.camera.applyGravity = false;
+	}
+
+	protected bindInput(): void {
+		super.bindInput();
+
+		// 垂直移动
+		this.inputSystem.onActionUpdate("fly", () => {
+			this.moveValue.y += this.getMoveSpeed();
+		});
+
+		this.inputSystem.onActionUpdate("sneak", () => {
+			this.moveValue.y -= this.getMoveSpeed();
+		});
+	}
+
+	protected getMoveSpeed(): number {
+		return 0.3; // 创造模式移动速度更快
 	}
 }

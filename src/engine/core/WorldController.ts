@@ -14,35 +14,32 @@ export class WorldController {
 
 	/**
 	 * 根据玩家位置更新区块和天空
-	 * @param playerX 玩家 X 坐标
-	 * @param playerZ 玩家 Z 坐标
 	 */
-	async updateChunk(playerX: number, playerZ: number) {
+	async updateChunk(position: Position) {
+		const { x, y, z } = position;
 		const shouldUpdateSky =
 			!this.lastSkyPos ||
-			Math.max(Math.abs(playerX - this.lastSkyPos.x), Math.abs(playerZ - this.lastSkyPos.z)) >
+			Math.max(Math.abs(x - this.lastSkyPos.x), Math.abs(z - this.lastSkyPos.z)) >
 				Sky.MinUpdateDistance;
 
 		if (shouldUpdateSky) {
-			this.sky.updatePosition(playerX, playerZ);
-			this.lastSkyPos = { x: playerX, z: playerZ };
+			this.sky.updatePosition(x, z);
+			this.lastSkyPos = { x, z };
 		}
 
 		const shouldUpdateChunk =
 			!this.lastUpdatePos ||
-			Math.max(
-				Math.abs(playerX - this.lastUpdatePos.x),
-				Math.abs(playerZ - this.lastUpdatePos.z)
-			) >= ChunkManager.MinUpdateDistance;
+			Math.max(Math.abs(x - this.lastUpdatePos.x), Math.abs(z - this.lastUpdatePos.z)) >=
+				ChunkManager.MinUpdateDistance;
 
 		if (shouldUpdateChunk) {
-			await this.chunkManager.updateChunksAround(playerX, playerZ);
-			this.lastUpdatePos = { x: playerX, z: playerZ };
+			await this.chunkManager.updateChunksAround(x, z);
+			this.lastUpdatePos = { x, z };
 		}
 	}
 
-	getColumnHeight(x: number, z: number): number {
-		return this.chunkManager.getColumnHeight(x, z);
+	getColumnHeight(position: Position): number {
+		return this.chunkManager.getColumnHeight(position.x, position.z);
 	}
 
 	/**
@@ -57,6 +54,11 @@ export class WorldController {
 	 * 设置指定位置的方块ID
 	 */
 	setBlock(position: Position, blockId: number) {
-		ChunkManager.setBlockAt(position.x, position.y, position.z, blockId);
+		const isModel =
+			BlockRegistry.Instance.getById(blockId).render?.type === "model" ||
+			this.getBlock(position).render?.type === "model";
+
+		// 设置方块
+		ChunkManager.setBlockAt(position.x, position.y, position.z, blockId, isModel);
 	}
 }

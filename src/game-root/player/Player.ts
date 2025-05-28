@@ -12,15 +12,15 @@ import {
 } from "@babylonjs/core";
 import { AdvancedDynamicTexture, Control, Rectangle } from "@babylonjs/gui";
 import { DebugHelper } from "@/game-root/utils/DebugHelper.ts";
-import { PlayerCamera } from "@/game-root/player/PlayerCamera.ts";
+import { BasePlayerCamera, CreativeCamera } from "@/game-root/player/PlayerCamera.ts";
 import MathUtils from "@/game-root/utils/MathUtils.ts";
-import { playerEvents } from "@/game-root/events";
 import { usePlayerStore, useWorldStore } from "@/store";
+import { PlayerInputSystem } from "@/game-root/player/PlayerInputSystem.ts";
 
 export class Player {
 	// 场景、相机、世界等
 	scene: Scene;
-	camera: PlayerCamera;
+	camera: BasePlayerCamera;
 	debugHelper: DebugHelper;
 
 	// 玩家模型
@@ -32,7 +32,7 @@ export class Player {
 	constructor(scene: Scene, canvas: HTMLCanvasElement) {
 		this.scene = scene;
 
-		this.camera = new PlayerCamera(scene, canvas);
+		this.camera = new CreativeCamera(scene, canvas);
 
 		this.addEventListener();
 		this.addCrossHair();
@@ -47,22 +47,22 @@ export class Player {
 	}
 
 	dispose() {
-		playerEvents.off("placeBlack", this.placeBlock.bind(this));
-		playerEvents.off("destroyBlock", this.destroyBlock.bind(this));
-		playerEvents.off("interactBlock", this.interactWithBlock.bind(this));
 		this.unsubscribe?.();
 		usePlayerStore.getState().reset();
 	}
 
 	// 处理键盘输入
 	private addEventListener() {
-		playerEvents.on("placeBlack", this.placeBlock.bind(this));
-		playerEvents.on("destroyBlock", this.destroyBlock.bind(this));
-		playerEvents.on("interactBlock", this.interactWithBlock.bind(this));
+		const inputSystem = PlayerInputSystem.Instance;
+		inputSystem.onActionUpdate("break", this.destroyBlock.bind(this));
+		inputSystem.onActionStart("interact", () => {
+			if (!this.interactWithBlock()) {
+				this.placeBlock();
+			}
+		});
 		// 订阅玩家位置变化
 		this.unsubscribe = usePlayerStore.subscribe(state => {
-			const { x, z } = state.position;
-			this.worldController.updateChunk(x, z);
+			this.worldController.updateChunk(state.position);
 		});
 	}
 
@@ -114,18 +114,23 @@ export class Player {
 	// 与方块交互
 	private interactWithBlock() {
 		const info = this.getTargetBlockInfo();
-		if (!info) return;
+		if (!info) return false;
 
 		const block = this.worldController.getBlock(info.currentBlockPos);
-		block?.behavior?.onInteract?.();
+		const interact = block?.behavior?.onInteract;
+		interact?.();
+
+		return !!interact;
 	}
 
 	// 放置方块
-	private placeBlock(blockId: number) {
+	private placeBlock() {
 		const info = this.getTargetBlockInfo();
 		if (!info) return;
 
 		const placePos = info.currentBlockPos.add(info.faceNormal);
+		let blockId = usePlayerStore.getState().holdBlockId;
+		if (blockId === 0) return;
 		this.worldController.setBlock(placePos, blockId);
 	}
 

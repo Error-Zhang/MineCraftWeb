@@ -1,7 +1,7 @@
 type GameEventHandler = (...args: any) => void;
 
 class GameWindow {
-	private static instance: GameWindow | null = null;
+	private static instance: GameWindow;
 
 	private active = false;
 	private canvas: HTMLCanvasElement;
@@ -19,6 +19,10 @@ class GameWindow {
 		document.addEventListener("pointerlockchange", this.onPointerLockChange);
 	}
 
+	public static get Instance() {
+		return this.instance;
+	}
+
 	public get isInGame(): boolean {
 		return this.active;
 	}
@@ -26,11 +30,11 @@ class GameWindow {
 	/**
 	 * 获取单例实例，若未初始化则创建
 	 */
-	public static getInstance(canvas: HTMLCanvasElement): GameWindow {
-		if (!GameWindow.instance) {
-			GameWindow.instance = new GameWindow(canvas);
+	public static create(canvas: HTMLCanvasElement): GameWindow {
+		if (!this.instance) {
+			this.instance = new this(canvas);
 		}
-		return GameWindow.instance;
+		return this.instance;
 	}
 
 	/**
@@ -74,15 +78,13 @@ class GameWindow {
 		}
 	}
 
-	public destroy() {
+	public dispose() {
 		for (const [type, handlerMap] of this.listeners.entries()) {
 			for (const wrapped of handlerMap.values()) {
 				window.removeEventListener(type, wrapped);
 			}
 		}
 		this.listeners.clear();
-		document.removeEventListener("pointerlockchange", this.onPointerLockChange);
-		GameWindow.instance = null;
 	}
 
 	private onPointerLockChange = () => {

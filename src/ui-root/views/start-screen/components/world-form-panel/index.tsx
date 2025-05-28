@@ -29,21 +29,19 @@ const WorldFormPanel: React.FC<WorldFormPanelProps> = ({
 	onCancel,
 	world,
 }) => {
-	const [formData, setFormData] = useState<IWorld>({} as any);
+	const [formData, setFormData] = useState<IWorld>({
+		worldName: generateRandomWorldName(),
+		seed: generateRandomSeed(),
+		gameMode: 0,
+		worldMode: 0,
+		season: 0,
+		isPublic: 0,
+	});
 
 	// 初始化表单数据
 	useEffect(() => {
 		if (isEditing && world) {
 			setFormData({ ...world });
-		} else {
-			setFormData({
-				worldName: generateRandomWorldName(),
-				seed: generateRandomSeed(),
-				gameMode: 0,
-				worldMode: 0,
-				season: 0,
-				isPublic: 0,
-			});
 		}
 	}, [isEditing, world]);
 

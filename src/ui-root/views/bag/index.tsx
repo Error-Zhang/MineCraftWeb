@@ -1,49 +1,30 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useState } from "react";
 import "./index.less";
-import CraftTable from "@/ui-root/views/craft-table";
 import InventoryGrid from "@/ui-root/components/inventory-grid";
 import { createEmptySlots } from "@/ui-root/components/slot";
 import { useToggleActive } from "@/ui-root/hooks/useToggle.tsx";
-import { GameContext } from "@/ui-root/GameUI.tsx";
-import { gameEventBus } from "@/game-root/core/GameEventBus.ts";
-import { GameEvents, IGameEvents } from "@/game-root/core/GameEvents.ts";
-import { Blocks } from "@/block/core/Blocks.ts";
+import { useGameStore } from "@/store";
 
-const PanelMap: Partial<Record<Blocks, React.FC<{ guid: string }>>> = {
-	[Blocks.CraftTable]: ({ guid }) => <CraftTable guid={guid} />,
-};
-
-const getPanel = (blockInfo: IGameEvents["InteractWithBlock"]) => {
-	const PanelComponent = PanelMap[blockInfo.blockType];
-	return PanelComponent && <PanelComponent guid={blockInfo.guid} />;
-};
+// const PanelMap: Partial<Record<BlockType, React.FC<{ guid: string }>>> = {
+// 	[BlockType.CraftTableBlock]: ({ guid }) => <CraftTable guid={guid} />,
+// };
+//
+// const getPanel = (blockInfo: any) => {
+// 	const PanelComponent = PanelMap[blockInfo.blockType];
+// 	return PanelComponent && <PanelComponent guid={blockInfo.guid} />;
+// };
 const Bag: React.FC<{ rows: number; columns: number }> = ({ rows, columns }) => {
-	const { game } = useContext(GameContext);
 	const [slots, setSlots] = useState(createEmptySlots(rows * columns));
 	const [isActive, setIsActive] = useState(false);
 
-	const [activeBlock, setActiveBlock] = useState<IGameEvents["InteractWithBlock"]>({} as any);
+	const [activeBlock, setActiveBlock] = useState({});
 
-	useToggleActive(game, setIsActive, "e", () => {
-		setActiveBlock({} as any);
-	});
-	useEffect(() => {
-		const interactWithCraftTable = (blockInfo: IGameEvents["InteractWithBlock"]) => {
-			setActiveBlock(blockInfo);
-			setIsActive(true);
-			game.togglePointerLock();
-		};
+	useToggleActive(setIsActive, "e", () => useGameStore.getState().gameMode !== 0);
 
-		gameEventBus.on(GameEvents.interactWithBlock, interactWithCraftTable);
-
-		return () => {
-			gameEventBus.off(GameEvents.interactWithBlock, interactWithCraftTable);
-		};
-	}, []);
 	return (
 		isActive && (
 			<div className="bag-panel absolute-center">
-				{getPanel(activeBlock)}
+				{/*{getPanel(activeBlock)}*/}
 				<div className="bag">
 					<div className="panel-title">背包</div>
 					<InventoryGrid

@@ -4,10 +4,13 @@ import { throttle } from "@/game-root/utils/lodash.ts";
 import { VoxelEngine } from "@engine/core/VoxelEngine.ts";
 import { ChunkData } from "@engine/types/chunk.type.ts";
 import { Chunk } from "@engine/chunk/Chunk.ts";
-import blocks from "@/game-root/block-definitions/blocks.ts";
+import { blocks, getBlocksMap } from "@/game-root/block-definitions/blocks.ts";
 import Assets from "@/game-root/assets";
-import { usePlayerStore, useWorldStore } from "@/store";
+import { useBlockStore, usePlayerStore, useWorldStore } from "@/store";
 import { Player } from "@/game-root/player/Player.ts";
+import { blockApi } from "@/api";
+import GameWindow from "@/game-root/core/GameWindow.ts";
+import { PlayerInputSystem } from "@/game-root/player/PlayerInputSystem.ts";
 
 // import { Inspector } from "@babylonjs/inspector";
 
@@ -15,59 +18,53 @@ export class Game {
 	private voxelEngine: VoxelEngine;
 	private engine: Engine;
 	private scene: Scene;
-	private player: Player | undefined;
+	private player!: Player;
 	private canvas: HTMLCanvasElement;
 
 	constructor(canvas: HTMLCanvasElement) {
+		GameWindow.create(canvas);
 		const voxel = new VoxelEngine(canvas);
 		this.canvas = canvas;
 		this.engine = voxel.engine;
 		this.scene = voxel.scene;
-
-		voxel.registerBlock({
-			textures: [{ key: "blocks", path: Assets.blocks.atlas }],
-			blocks,
-		});
-
 		this.voxelEngine = voxel;
+		this.initBlock();
+		this.initChunk();
 		this.attachFPSDisplay();
+		voxel.onUpdate(() => {
+			PlayerInputSystem.Instance.update();
+		});
 	}
 
 	start() {
-		const worldController = this.voxelEngine.registerChunk(this.flatWorldGenerator.bind(this), {
-			chunkHeight: 64,
-		});
-		useWorldStore.setState({ worldController });
+		console.log("Starting Game");
+		const worldController = useWorldStore.getState().worldController!;
 		const playerPos = usePlayerStore.getState().position;
 
 		this.voxelEngine.start();
-		worldController.updateChunk(playerPos.x, playerPos.z).then(() => {
+		worldController.updateChunk(playerPos).then(() => {
 			// 更新玩家y轴坐标
-			usePlayerStore.setState({
-				position: {
-					...playerPos,
-					y: worldController.getColumnHeight(playerPos.x, playerPos.z) + 2,
-				},
-			});
+			usePlayerStore.getState().move(0, worldController.getColumnHeight(playerPos) + 2, 0);
 			this.player = new Player(this.scene, this.canvas);
 		});
 	}
 
 	dispose() {
-		this.voxelEngine.disposeWorld();
+		this.voxelEngine.dispose();
 		useWorldStore.getState().reset();
-		this.player?.dispose();
+		this.player.dispose();
 	}
 
 	destroy() {
 		this.dispose();
 		this.scene.dispose();
 		this.engine.dispose();
+		GameWindow.Instance.dispose();
 	}
 
 	async flatWorldGenerator(chunkX: number, chunkZ: number) {
 		const chunkData: ChunkData = {
-			blocks: new Array(16 * 16 * 64).fill(0),
+			blocks: [],
 			dirtyBlocks: {},
 			position: {
 				x: chunkX,
@@ -77,27 +74,11 @@ export class Game {
 
 		// 生成基础地形
 		for (let y = 0; y < 64; y++) {
-			const id = y == 4 ? 1 : y < 4 ? 2 : 0;
+			const id = y == 4 ? 4 : y < 4 ? 3 : 0;
 			for (let z = 0; z < 16; z++) {
 				for (let x = 0; x < 16; x++) {
 					const index = y * 16 * 16 + z * 16 + x;
 					chunkData.blocks[index] = id;
-				}
-			}
-		}
-
-		// 在表面添加随机装饰方块
-		const surfaceY = 5; // 表面层高度
-		const decorationBlocks = [3, 4, 5]; // 装饰方块的ID列表
-		const decorationChance = 0.1; // 10%的概率生成装饰方块
-
-		for (let z = 0; z < 16; z++) {
-			for (let x = 0; x < 16; x++) {
-				if (Math.random() < decorationChance) {
-					const randomBlockId =
-						decorationBlocks[Math.floor(Math.random() * decorationBlocks.length)];
-					const index = surfaceY * 16 * 16 + z * 16 + x;
-					chunkData.blocks[index] = randomBlockId;
 				}
 			}
 		}
@@ -108,7 +89,7 @@ export class Game {
 	/**
 	 * 在 Canvas 中右上角显示 FPS
 	 */
-	attachFPSDisplay() {
+	private attachFPSDisplay() {
 		const guiTexture = AdvancedDynamicTexture.CreateFullscreenUI("FPS-UI", true, this.scene);
 
 		const fpsLabel = new TextBlock();
@@ -127,5 +108,36 @@ export class Game {
 
 		// 更新 FPS 显示
 		this.scene.onBeforeRenderObservable.add(updateFPS);
+	}
+
+	private initChunk() {
+		const worldController = this.voxelEngine.registerChunk(this.flatWorldGenerator.bind(this), {
+			chunkHeight: 64,
+		});
+		useWorldStore.setState({ worldController });
+	}
+
+	private initBlock() {
+		blockApi.getBlockTypes().then(blockTypes => {
+			useBlockStore.setState({ blockTypes });
+			// 验证客户端与服务器之间方块表是否完全匹配
+			const blocksMap = getBlocksMap();
+			Object.entries(blockTypes.byName).forEach(([blockType, blockId]) => {
+				if (blockId === 0) return;
+				if (!blocksMap[blockType]) {
+					throw new Error(`Block ${blockType} was not defined in website.`);
+				}
+			});
+			console.log("[Game] 方块表匹配成功");
+			// 合并方块表:服务器 > 客户端
+			const blockRegistry = this.voxelEngine.registerBlock({
+				textures: [{ key: "blocks", path: Assets.blocks.atlas }],
+				blocks: blocks.map(block => ({
+					...block,
+					id: blockTypes.byName[block.blockType] ?? block.id,
+				})),
+			});
+			useBlockStore.setState({ blockRegistry });
+		});
 	}
 }

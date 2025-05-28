@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { DroppedSlotType, SlotType } from "@/ui-root/components/slot";
-import GameEventBus from "@/game-root/core/GameEventBus.ts";
+import { EventEmitter } from "eventemitter3";
 
-const panelEventBus = new GameEventBus(); // 新建一个panelEventBus专门处理面板之间的通信
+const panelEventBus = new EventEmitter(); // 新建一个panelEventBus专门处理面板之间的通信
 
 export function useInventorySlots(
 	source: string,
@@ -94,7 +94,9 @@ export function useInventorySlots(
 			!isSplit && setDroppedIndex(-1);
 		};
 		panelEventBus.on(source, callback);
-		return () => panelEventBus.off(source, callback); // 注意一定要关闭监听
+		return () => {
+			panelEventBus.off(source, callback); // 注意一定要关闭监听
+		};
 	}, [slots, setSlots, droppedIndex]);
 
 	return {

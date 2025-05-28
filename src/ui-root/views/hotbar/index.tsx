@@ -1,25 +1,20 @@
-import React, { useContext, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Slot, { createEmptySlots, SlotType } from "../../components/slot";
 import "./index.less";
-import { GameContext } from "@/ui-root/GameUI.tsx";
 import { useInventorySlots } from "@/ui-root/components/inventory-grid/useInventorySlots.tsx";
-import { HOTBAR_SIZE, useGameControls } from "@/ui-root/views/hotbar/useGameControls.tsx";
+import { HOTBAR_SIZE, useHotBarControls } from "@/ui-root/views/hotbar/useHotBarControls.tsx";
+import { usePlayerStore } from "@/store";
 
 const HotBar: React.FC = () => {
-	const { game } = useContext(GameContext);
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [slots, setSlots] = useState<SlotType[]>(createEmptySlots(HOTBAR_SIZE));
 
-	// 直接一行搞定所有监听！
-	useGameControls({
-		game,
-		slots,
-		setSlots,
-		selectedIndex,
-		setSelectedIndex,
-	});
-
+	useHotBarControls(setSelectedIndex);
 	const { setDroppedIndex, onDrop } = useInventorySlots("HotBar", slots, setSlots);
+
+	useEffect(() => {
+		usePlayerStore.setState({ holdBlockId: slots[selectedIndex]?.id || 0 });
+	}, [slots, selectedIndex]);
 
 	return (
 		<div className="hotbar-container">

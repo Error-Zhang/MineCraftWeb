@@ -83,6 +83,10 @@ export class WorldRenderer {
 		}
 	}
 
+	public getRenderer(key: string) {
+		return this.renderers.get(key);
+	}
+
 	public setChunkVisibility(key: string, visible: boolean) {
 		const renderer = this.renderers.get(key);
 		if (renderer) {

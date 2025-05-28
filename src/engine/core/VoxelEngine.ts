@@ -10,6 +10,7 @@ import { Chunk } from "../chunk/Chunk.ts";
 import Sky from "../environment/Sky.ts";
 import { WorldController } from "./WorldController.ts";
 import { GameTime } from "../systems/GameTime";
+import { LiquidManager } from "../liquid/LiquidManager";
 // 注册着色器
 Effect.ShadersStore["waterVertexShader"] = waterVertexShader;
 Effect.ShadersStore["waterFragmentShader"] = waterFragmentShader;
@@ -30,9 +31,11 @@ export class VoxelEngine {
 	public readonly scene: Scene;
 	public readonly gameTime: GameTime;
 
-	private readonly blockRegistry: BlockRegistry;
+	private blockRegistry!: BlockRegistry;
+	private chunkManager!: ChunkManager;
 	private readonly worldRenderer: WorldRenderer;
 	private readonly sky: Sky;
+	private readonly liquidManager: LiquidManager;
 
 	private animationCallbacks: Set<() => void> = new Set();
 	private disposers: (() => void)[] = [];
@@ -45,23 +48,25 @@ export class VoxelEngine {
 		this.scene.collisionsEnabled = true;
 
 		this.gameTime = new GameTime();
-		// 设置游戏时间为正午（12:00）
-		this.gameTime.setTime(12 * 3600); // 12小时 * 3600秒
+
 		this.sky = new Sky(this.scene, this.gameTime);
 
-		this.blockRegistry = BlockRegistry.Instance;
 		this.worldRenderer = new WorldRenderer(this.scene);
+		this.liquidManager = LiquidManager.Instance;
 
 		this.onUpdate(() => {
-			ChunkManager.Instance.forEachBlockEntity(entity => {
-				entity.tick?.();
-			});
 			// 更新游戏时间
 			this.gameTime.update(this.engine.getDeltaTime() / 1000);
+			// 更新液体
+			this.liquidManager.update(this.engine.getDeltaTime());
 		});
+
+		const resizeListener = () => this.engine.resize();
+		window.addEventListener("resize", resizeListener);
+		this.disposers.push(() => window.removeEventListener("resize", resizeListener));
 	}
 
-	public disposeWorld() {
+	public dispose() {
 		for (const dispose of this.disposers) dispose();
 		for (const plugin of this.plugins) plugin.onDispose?.();
 		this.animationCallbacks.clear();
@@ -82,15 +87,13 @@ export class VoxelEngine {
 	}
 
 	public start() {
+		// 设置游戏时间为正午（12:00）
+		this.gameTime.setTime(12 * 3600);
 		this.engine.runRenderLoop(() => {
 			for (const cb of this.animationCallbacks) cb();
 			for (const plugin of this.plugins) plugin.onTick?.();
 			this.scene.render();
 		});
-
-		const resizeListener = () => this.engine.resize();
-		window.addEventListener("resize", resizeListener);
-		this.disposers.push(() => window.removeEventListener("resize", resizeListener));
 	}
 
 	public registerBlock({
@@ -102,9 +105,12 @@ export class VoxelEngine {
 		blockProperties?: Record<string, BlockProperties>;
 	}) {
 		BlockTextureManager.registerTextures(this.scene, textures);
-		this.blockRegistry.registerBlocks(blocks);
 		BlockMaterialManager.initializePresetMaterials();
+		this.blockRegistry = BlockRegistry.create();
+		this.blockRegistry.registerBlocks(blocks);
 		console.log("[VoxelEngine] 方块注册完成");
+
+		return this.blockRegistry;
 	}
 
 	public registerChunk(
@@ -122,8 +128,13 @@ export class VoxelEngine {
 		chunkSize && (ChunkManager.ChunkSize = chunkSize);
 		chunkHeight && (ChunkManager.ChunkHeight = chunkHeight);
 		viewDistance && (ChunkManager.LoadDistance = viewDistance);
-		const chunkManager = ChunkManager.create(chunkGenerator, this.worldRenderer);
+		this.chunkManager = ChunkManager.create(chunkGenerator, this.worldRenderer);
+		this.onUpdate(() => {
+			this.chunkManager.forEachBlockEntity(entity => {
+				entity.tick?.();
+			});
+		});
 		console.log("[VoxelEngine] 区块注册完成");
-		return new WorldController(chunkManager, this.sky);
+		return new WorldController(this.chunkManager, this.sky);
 	}
 }
