@@ -33,7 +33,8 @@ export class PlayerClient {
 	}
 
 	async sendPlaceBlock(position: { x: number; y: number; z: number }, blockId: number) {
-		let data: IBlockActionData = { ...position, blockId };
+		const { x, y, z } = position;
+		let data: IBlockActionData = { x, y, z, blockId }; // 不要使用剩余参数赋值，如果传入的是Vector会出错
 		await this.worldClient.setBlock(data);
 		await this.connection.invoke("PlaceBlock", data);
 	}

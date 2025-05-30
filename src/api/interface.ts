@@ -9,9 +9,7 @@ export interface IPlayer {
 	playerName: string;
 	sex: number;
 	createdAt: string;
-	worldId: number;
-	userId: number;
-	user: IUser;
+	user?: IUser;
 }
 
 export interface IWorld {
@@ -36,12 +34,6 @@ export interface IBlockReflect {
 export interface IChunkData {
 	x: number;
 	z: number;
-	cells: number[]; // 长度 = chunkSize * chunkSize * chunkHeight
-	shafts: Record<string, ChunkShaftData>; // key 为 "x,z"
-}
-
-export interface ChunkShaftData {
-	top: number; // 最顶部非空气方块的 y 值
-	humidity: number; // 湿度值
-	temperature: number; // 温度值
+	cells: number[];
+	shafts: number[];
 }

@@ -2,13 +2,7 @@ export interface ChunkData {
 	blocks: number[];
 	position: { x: number; z: number };
 	dirtyBlocks: Record<string, number>;
-	shafts: Record<
-		string,
-		{
-			humidity: number;
-			temperature: number;
-		}
-	>;
+	shafts: number[];
 }
 
 export type Coords = {

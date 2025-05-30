@@ -16,6 +16,7 @@ import { playerEvents } from "@/game-root/core/events.ts";
 import { IChunkSetting } from "@/game-root/client/interface.ts";
 import { WorldController } from "@engine/core/WorldController.ts";
 import { NpcPlayer } from "@/game-root/player/NpcPlayer.ts";
+import MathUtils from "@/game-root/utils/MathUtils.ts";
 
 // import { Inspector } from "@babylonjs/inspector";
 
@@ -89,6 +90,7 @@ export class Game {
 		const playerClient = this.gameClient.playerClient;
 
 		playerClient.onPlayerJoined(playerId => {
+			console.log("playerJoined", playerId);
 			const player = new NpcPlayer(this.scene, playerId);
 			this.initPlayerPosition(player.setPosition);
 			this.npcPlayers.set(playerId, player);
@@ -109,7 +111,7 @@ export class Game {
 			worldController.setBlock(blockActionData, blockActionData.blockId);
 		});
 
-		this.player.onPlaceBlock(playerClient.sendPlaceBlock);
+		this.player.onPlaceBlock(playerClient.sendPlaceBlock.bind(playerClient));
 
 		playerEvents.on("move", (playerPos: Position) => {
 			worldController.updateChunk(playerPos);
@@ -118,7 +120,7 @@ export class Game {
 
 		worldController.onChunkUpdated(isInit => {
 			if (isInit) {
-				this.initPlayerPosition(this.player.setPosition);
+				this.initPlayerPosition(position => this.player.setPosition(position));
 			}
 		});
 	}
@@ -134,7 +136,7 @@ export class Game {
 			const chunkData: ChunkData = {
 				blocks: [],
 				dirtyBlocks: {},
-				shafts: {},
+				shafts: [],
 				position: {
 					x: chunkX,
 					z: chunkZ,
@@ -186,16 +188,20 @@ export class Game {
 		return async (coords: Coords) => {
 			const chunksData = await worldApi.generateChunks(this.worldStore.worldId, coords);
 
-			return chunksData.map((chunkData: { cells: number[]; shafts: any; x: number; z: number }) =>
-				Chunk.fromJSON({
-					blocks: chunkData.cells.map(id => useBlockStore.getState().extractBlockId(id)),
-					dirtyBlocks: {},
-					shafts: chunkData.shafts,
-					position: {
-						x: chunkData.x,
-						z: chunkData.z,
-					},
-				})
+			return chunksData.map(
+				(chunkData: { cells: number[]; shafts: number[]; x: number; z: number }) =>
+					Chunk.fromJSON({
+						blocks: MathUtils.decompressRLE(
+							chunkData.cells,
+							useBlockStore.getState().extractBlockId
+						),
+						dirtyBlocks: {},
+						shafts: chunkData.shafts,
+						position: {
+							x: chunkData.x,
+							z: chunkData.z,
+						},
+					})
 			);
 		};
 	}

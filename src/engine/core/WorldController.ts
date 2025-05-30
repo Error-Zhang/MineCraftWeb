@@ -66,7 +66,6 @@ export class WorldController {
 		const isModel =
 			BlockRegistry.Instance.getById(blockId).render?.type === "model" ||
 			this.getBlock(position).render?.type === "model";
-
 		// 设置方块
 		ChunkManager.setBlockAt(position.x, position.y, position.z, blockId, isModel);
 	}

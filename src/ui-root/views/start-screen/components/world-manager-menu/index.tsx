@@ -63,7 +63,7 @@ const WorldManagerMenu: React.FC<{ setPage: (page: ScreenPage) => void }> = ({ s
 	};
 
 	const enterToWorld = async (world: IWorld, enter: boolean = false) => {
-		const hasPlayer = world.players?.find(player => player.user.id === userId);
+		const hasPlayer = world.players?.find(player => player.user?.id === userId);
 		if (enter || hasPlayer) {
 			const player = await playerApi.getPlayer(world.id!);
 			useWorldStore.setState({

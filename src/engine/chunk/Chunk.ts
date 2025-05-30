@@ -16,7 +16,7 @@ export class Chunk {
 
 	public dirtyBlocks: Record<string, number> = {};
 	public blockEntities: Record<string, BlockEntity> = {};
-	public shafts: ChunkData["shafts"] = {};
+	public shafts: ChunkData["shafts"] = [];
 
 	constructor(x: number, z: number) {
 		this.position = { x, z };
