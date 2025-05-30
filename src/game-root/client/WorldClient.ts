@@ -1,16 +1,6 @@
 // WorldClient.ts
 import * as signalR from "@microsoft/signalr";
-
-export interface ChunkRequest {
-	chunkX: number;
-	chunkZ: number;
-}
-
-export interface ChunkData {
-	chunkX: number;
-	chunkZ: number;
-	blocks: number[][][]; // 举例结构
-}
+import { ApiResponse, IBlockActionData, IChunkSetting } from "@/game-root/client/interface.ts";
 
 export class WorldClient {
 	private connection: signalR.HubConnection;
@@ -25,16 +15,34 @@ export class WorldClient {
 	async connect() {
 		await this.connection.start();
 		console.log("[WorldClient] Connected");
-
-		this.connection.on("ReceiveChunk", (data: ChunkData) => {});
 	}
 
 	async disconnect() {
+		await this.leaveWorld();
 		await this.connection.stop();
 		console.log("[WorldClient] Disconnected");
 	}
 
-	async requestChunk(req: ChunkRequest) {
-		await this.connection.invoke("RequestChunk", req);
+	async setBlock(block: IBlockActionData) {
+		await this.connection.invoke<ApiResponse<any>>("SetBlock", block);
+	}
+
+	async joinWorld(worldId: number, playerId: number) {
+		const response = await this.connection.invoke<ApiResponse<IChunkSetting>>(
+			"JoinWorld",
+			worldId,
+			playerId
+		);
+		if (response.code !== 200) {
+			throw new Error(`Can't join world because ${response.message}`);
+		}
+		return response.data;
+	}
+
+	async leaveWorld() {
+		const response = await this.connection.invoke<ApiResponse<any>>("LeaveWorld");
+		if (response.code !== 200) {
+			throw new Error(`Can't leave world because ${response.message}`);
+		}
 	}
 }

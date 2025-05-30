@@ -77,102 +77,255 @@ export class ChunkMeshBuilder {
 		const renderedBlocks = new Set<string>();
 		const modelBlocks = new Map<string, number>();
 
-		const iterate = (x: number, y: number, z: number) => {
-			const key = `${x},${y},${z}`;
-			const blockId = chunk.getBlock(x, y, z);
-			if (blockId === 0) return;
-
-			const def = BlockRegistry.Instance.getById(blockId);
-			if (!def?.render) return;
-
-			const posX = worldX + x;
-			const posY = y;
-			const posZ = worldZ + z;
-
-			switch (def.render.type) {
-				case "cube": {
-					const render = def.render as CubeRender;
-					const matKey = render.material.matKey;
-
-					if (!mergeGroups.has(matKey)) {
-						mergeGroups.set(matKey, this.initData());
-					}
-					const target = mergeGroups.get(matKey)!;
-
-					let hasFace = false;
-					for (let i = 0; i < 6; i++) {
-						const normal = FaceDirectionOffset[i];
-						const nx = posX + normal[0];
-						const ny = posY + normal[1];
-						const nz = posZ + normal[2];
-						const neighborId = ChunkManager.getBlockAt(nx, ny, nz);
-						const neighbor = BlockRegistry.Instance.getById(neighborId);
-						let shouldRender = this.shouldRenderFace(blockId, neighborId, render, neighbor.render);
-						if (shouldRender) {
-							let surfaceColor = i === 4 ? render.material.surfaceColor : undefined;
-							this.addFace(target, posX, posY, posZ, i, render.uvs[i], surfaceColor);
-							hasFace = true;
-						}
-					}
-					if (hasFace) {
-						renderedBlocks.add(key);
-					}
-					break;
-				}
-				case "cross": {
-					const render = def.render as CrossRender;
-					const matKey = render.material.matKey;
-
-					if (!mergeGroups.has(matKey)) {
-						mergeGroups.set(matKey, this.initData());
-					}
-					const target = mergeGroups.get(matKey)!;
-
-					this.addCross(
-						target,
-						posX,
-						posY,
-						posZ,
-						render.uvs[render.uvIndex],
-						render.material.surfaceColor
-					);
-					renderedBlocks.add(key);
-					break;
-				}
-				case "model": {
-					modelBlocks.set(`${posX},${posY},${posZ}`, blockId);
-					// 模型被固体方块包围的情况过于少见，故不做处理
-					renderedBlocks.add(key);
-					break;
-				}
-			}
-		};
-
-		if (filter) {
-			for (const key of filter) {
-				const [x, y, z] = key.split(",").map(Number);
-				iterate(x, y, z);
-			}
+		if (filter && filter.size) {
+			this.processFilteredBlocks(
+				chunk,
+				filter,
+				worldX,
+				worldZ,
+				mergeGroups,
+				renderedBlocks,
+				modelBlocks
+			);
+			this.processChunkEdges(chunk, size, height, mergeGroups, renderedBlocks, modelBlocks);
 		} else {
-			for (let y = 0; y < height; y++) {
-				for (let z = 0; z < size; z++) {
-					for (let x = 0; x < size; x++) {
-						iterate(x, y, z);
-					}
-				}
-			}
-		}
-
-		const meshGroups: Record<string, VertexData> = {};
-		for (const [matKey, data] of mergeGroups.entries()) {
-			meshGroups[matKey] = this.createVertexData(data);
+			this.processAllBlocks(
+				chunk,
+				size,
+				height,
+				worldX,
+				worldZ,
+				mergeGroups,
+				renderedBlocks,
+				modelBlocks
+			);
 		}
 
 		return {
-			meshGroups,
+			meshGroups: this.createMeshGroups(mergeGroups),
 			modelBlocks,
 			renderedBlocks,
 		};
+	}
+
+	private static processFilteredBlocks(
+		chunk: Chunk,
+		filter: Set<string>,
+		worldX: number,
+		worldZ: number,
+		mergeGroups: Map<string, MeshData>,
+		renderedBlocks: Set<string>,
+		modelBlocks: Map<string, number>
+	) {
+		for (const key of filter) {
+			const [x, y, z] = key.split(",").map(Number);
+			this.processBlock(chunk, x, y, z, worldX, worldZ, mergeGroups, renderedBlocks, modelBlocks);
+		}
+	}
+
+	private static processChunkEdges(
+		chunk: Chunk,
+		size: number,
+		height: number,
+		mergeGroups: Map<string, MeshData>,
+		renderedBlocks: Set<string>,
+		modelBlocks: Map<string, number>
+	) {
+		if (!chunk.edges.length) return;
+
+		const edgeConfigs = [
+			{ edge: 0, getCoords: (x: number, y: number, z: number) => [0, y, z] },
+			{ edge: 1, getCoords: (x: number, y: number, z: number) => [size - 1, y, z] },
+			{ edge: 2, getCoords: (x: number, y: number, z: number) => [x, y, 0] },
+			{ edge: 3, getCoords: (x: number, y: number, z: number) => [x, y, size - 1] },
+		];
+
+		for (let y = 0; y < height; y++) {
+			for (const { edge, getCoords } of edgeConfigs) {
+				if (chunk.edges.includes(edge)) {
+					const isXEdge = edge < 2;
+					const range = size;
+					const fixedCoord = y;
+
+					for (let i = 0; i < range; i++) {
+						const [x, y, z] = getCoords(isXEdge ? 0 : i, fixedCoord, isXEdge ? i : 0);
+						const key = `${x},${y},${z}`;
+						if (!renderedBlocks.has(key)) {
+							this.processBlock(
+								chunk,
+								x,
+								y,
+								z,
+								chunk.position.x * size,
+								chunk.position.z * size,
+								mergeGroups,
+								renderedBlocks,
+								modelBlocks
+							);
+						}
+					}
+				}
+			}
+		}
+		chunk.edges.length = 0;
+	}
+
+	private static processAllBlocks(
+		chunk: Chunk,
+		size: number,
+		height: number,
+		worldX: number,
+		worldZ: number,
+		mergeGroups: Map<string, MeshData>,
+		renderedBlocks: Set<string>,
+		modelBlocks: Map<string, number>
+	) {
+		for (let z = 0; z < size; z++) {
+			for (let x = 0; x < size; x++) {
+				for (let y = 0; y < height; y++) {
+					this.processBlock(
+						chunk,
+						x,
+						y,
+						z,
+						worldX,
+						worldZ,
+						mergeGroups,
+						renderedBlocks,
+						modelBlocks
+					);
+				}
+			}
+		}
+	}
+
+	private static processBlock(
+		chunk: Chunk,
+		x: number,
+		y: number,
+		z: number,
+		worldX: number,
+		worldZ: number,
+		mergeGroups: Map<string, MeshData>,
+		renderedBlocks: Set<string>,
+		modelBlocks: Map<string, number>
+	) {
+		const key = `${x},${y},${z}`;
+		const blockId = chunk.getBlock(x, y, z);
+		if (blockId === 0) return;
+
+		const def = BlockRegistry.Instance.getById(blockId);
+		if (!def?.render) return;
+
+		const posX = worldX + x;
+		const posY = y;
+		const posZ = worldZ + z;
+
+		switch (def.render.type) {
+			case "cube": {
+				this.processCubeBlock(
+					def.render as CubeRender,
+					posX,
+					posY,
+					posZ,
+					blockId,
+					mergeGroups,
+					renderedBlocks,
+					key
+				);
+				break;
+			}
+			case "cross": {
+				this.processCrossBlock(
+					def.render as CrossRender,
+					posX,
+					posY,
+					posZ,
+					mergeGroups,
+					renderedBlocks,
+					key
+				);
+				break;
+			}
+			case "model": {
+				modelBlocks.set(`${posX},${posY},${posZ}`, blockId);
+				renderedBlocks.add(key);
+				break;
+			}
+		}
+	}
+
+	private static processCubeBlock(
+		render: CubeRender,
+		posX: number,
+		posY: number,
+		posZ: number,
+		blockId: number,
+		mergeGroups: Map<string, MeshData>,
+		renderedBlocks: Set<string>,
+		key: string
+	) {
+		const matKey = render.material.matKey;
+		if (!mergeGroups.has(matKey)) {
+			mergeGroups.set(matKey, this.initData());
+		}
+		const target = mergeGroups.get(matKey)!;
+
+		let hasFace = false;
+		for (let i = 0; i < 6; i++) {
+			const normal = FaceDirectionOffset[i];
+			const nx = posX + normal[0];
+			const ny = posY + normal[1];
+			const nz = posZ + normal[2];
+			const neighborId = ChunkManager.getBlockAt(nx, ny, nz);
+			const neighbor = BlockRegistry.Instance.getById(neighborId);
+
+			let shouldRender = this.shouldRenderFace(blockId, neighborId, render, neighbor.render);
+			if (shouldRender) {
+				let surfaceColor = i === 4 ? render.material.surfaceColor : undefined;
+				this.addFace(target, posX, posY, posZ, i, render.uvs[i], surfaceColor);
+				hasFace = true;
+			}
+		}
+		if (hasFace) {
+			renderedBlocks.add(key);
+		}
+	}
+
+	private static processCrossBlock(
+		render: CrossRender,
+		posX: number,
+		posY: number,
+		posZ: number,
+		mergeGroups: Map<string, MeshData>,
+		renderedBlocks: Set<string>,
+		key: string
+	) {
+		const matKey = render.material.matKey;
+		if (!mergeGroups.has(matKey)) {
+			mergeGroups.set(matKey, this.initData());
+		}
+		const target = mergeGroups.get(matKey)!;
+
+		this.addCross(
+			target,
+			posX,
+			posY,
+			posZ,
+			render.uvs[render.uvIndex],
+			render.material.surfaceColor
+		);
+		renderedBlocks.add(key);
+	}
+
+	private static createMeshGroups(mergeGroups: Map<string, MeshData>): Record<string, VertexData> {
+		const meshGroups: Record<string, VertexData> = {};
+		for (const [matKey, data] of mergeGroups.entries()) {
+			if (data.positions.length) {
+				meshGroups[matKey] = this.createVertexData(data);
+			}
+		}
+		return meshGroups;
 	}
 
 	private static shouldRenderFace(
@@ -181,7 +334,7 @@ export class ChunkMeshBuilder {
 		currentRender: CubeRender,
 		neighborRender: RenderComponent
 	): boolean {
-		// 0. 超出范围，不渲染
+		// 超出范围，不渲染
 		if (neighborId === -1) return false;
 		// 1. 邻居方块空气，应该渲染
 		if (neighborId === 0) return true;

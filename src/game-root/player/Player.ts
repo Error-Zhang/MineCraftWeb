@@ -1,38 +1,49 @@
 import {
 	Color3,
 	Color4,
-	ImportMeshAsync,
 	Mesh,
 	MeshBuilder,
 	PointerEventTypes,
 	Scene,
 	StandardMaterial,
-	TransformNode,
 	Vector3,
 } from "@babylonjs/core";
 import { AdvancedDynamicTexture, Control, Rectangle } from "@babylonjs/gui";
 import { DebugHelper } from "@/game-root/utils/DebugHelper.ts";
-import { BasePlayerCamera, CreativeCamera } from "@/game-root/player/PlayerCamera.ts";
+import {
+	BasePlayerCamera,
+	CreativeCamera,
+	SurvivalCamera,
+} from "@/game-root/player/PlayerCamera.ts";
 import MathUtils from "@/game-root/utils/MathUtils.ts";
-import { usePlayerStore, useWorldStore } from "@/store";
+import { useGameStore, usePlayerStore, useWorldStore } from "@/store";
 import { PlayerInputSystem } from "@/game-root/player/PlayerInputSystem.ts";
+import { PlayerModel } from "@/game-root/player/PlayerModel.ts";
+import Assets from "@/game-root/assets";
 
 export class Player {
+	private camera: BasePlayerCamera;
 	// 场景、相机、世界等
-	scene: Scene;
-	camera: BasePlayerCamera;
-	debugHelper: DebugHelper;
+	private scene: Scene;
+	private debugHelper: DebugHelper;
 
-	// 玩家模型
-	player: Mesh | undefined;
-
-	maxPlaceDistance = 12; // 最大方块放置距离
-	private unsubscribe?: Function;
+	private maxPlaceDistance = 12; // 最大方块放置距离
+	private placeBlockCallBacks: ((
+		position: { x: number; y: number; z: number },
+		blockId: number
+	) => void)[] = [];
 
 	constructor(scene: Scene, canvas: HTMLCanvasElement) {
 		this.scene = scene;
 
-		this.camera = new CreativeCamera(scene, canvas);
+		const Camera = useGameStore.getState().gameMode ? SurvivalCamera : CreativeCamera;
+
+		this.camera = new Camera(scene, canvas);
+
+		const playerModel = new PlayerModel(scene);
+		playerModel.loadPlayerModel(Assets.player.models.HumanMale).then(model => {
+			this.camera.setChild(model);
+		});
 
 		this.addEventListener();
 		this.addCrossHair();
@@ -46,56 +57,27 @@ export class Player {
 		return useWorldStore.getState().worldController!;
 	}
 
-	dispose() {
-		this.unsubscribe?.();
-		usePlayerStore.getState().reset();
+	private get playerStore() {
+		return usePlayerStore.getState();
+	}
+
+	onPlaceBlock(callback: (position: { x: number; y: number; z: number }, blockId: number) => void) {
+		this.placeBlockCallBacks.push(callback);
+	}
+
+	public setPosition(position: Vector3): void {
+		this.camera.setPosition(position);
 	}
 
 	// 处理键盘输入
 	private addEventListener() {
 		const inputSystem = PlayerInputSystem.Instance;
-		inputSystem.onActionUpdate("break", this.destroyBlock.bind(this));
+		inputSystem.onActionUpdate("break", () => this.destroyBlock());
 		inputSystem.onActionStart("interact", () => {
 			if (!this.interactWithBlock()) {
 				this.placeBlock();
 			}
 		});
-		// 订阅玩家位置变化
-		this.unsubscribe = usePlayerStore.subscribe(state => {
-			this.worldController.updateChunk(state.position);
-		});
-	}
-
-	// 加载玩家模型
-	private async loadPlayerModel(modelPath: string) {
-		const { meshes } = await ImportMeshAsync(modelPath, this.scene);
-		const collider = this.createPlayerCollider();
-		const playerModel = new TransformNode("player", this.scene);
-		meshes.forEach(mesh => {
-			mesh.isPickable = false;
-			mesh.setParent(playerModel);
-		});
-		playerModel.parent = collider;
-		playerModel.position.y = -0.7; // 半高对齐
-		this.player = collider;
-	}
-
-	// 创建玩家碰撞体
-	private createPlayerCollider(): Mesh {
-		const collider = MeshBuilder.CreateBox(
-			"playerCollider",
-			{
-				width: 0.4,
-				depth: 0.2,
-				height: 1.7,
-			},
-			this.scene
-		);
-		collider.position = new Vector3(1, 2, 1);
-		collider.checkCollisions = true;
-		collider.isVisible = false;
-		collider.isPickable = false;
-		return collider;
 	}
 
 	private getTargetBlockInfo() {
@@ -129,17 +111,16 @@ export class Player {
 		if (!info) return;
 
 		const placePos = info.currentBlockPos.add(info.faceNormal);
-		let blockId = usePlayerStore.getState().holdBlockId;
+		let blockId = this.playerStore.holdBlockId;
 		if (blockId === 0) return;
-		this.worldController.setBlock(placePos, blockId);
+		this.placeBlockCallBacks.forEach(callback => callback(placePos, blockId));
 	}
 
 	// 销毁方块
 	private destroyBlock() {
 		const info = this.getTargetBlockInfo();
 		if (!info) return;
-
-		this.worldController.setBlock(info.currentBlockPos, 0);
+		this.placeBlockCallBacks.forEach(callback => callback(info.currentBlockPos, 0));
 	}
 
 	private showBlockHoverOutline() {

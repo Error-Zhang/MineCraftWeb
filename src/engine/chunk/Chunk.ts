@@ -10,14 +10,16 @@ export class Chunk {
 	// 该属性影响是否需要重新渲染
 	public isDirty: boolean = false;
 	// 该属性影响是否渲染
-	public isVisible: boolean = false;
+	public isVisible: boolean = true;
+	// 该属性表示区块的边界状态 [0,1,2,3] 分别表示 x-,x+,z-,z+ 边界
+	public edges: number[] = [];
 
 	public dirtyBlocks: Record<string, number> = {};
-	blockEntities: Map<string, BlockEntity> = new Map();
+	public blockEntities: Record<string, BlockEntity> = {};
+	public shafts: ChunkData["shafts"] = {};
 
 	constructor(x: number, z: number) {
 		this.position = { x, z };
-		// block[y * size * size + z * size + x] → blockId
 		this.blocks = new Uint16Array(
 			ChunkManager.ChunkSize * ChunkManager.ChunkSize * ChunkManager.ChunkHeight
 		);
@@ -30,12 +32,18 @@ export class Chunk {
 	public static fromJSON(data: ChunkData): Chunk {
 		const chunk = new Chunk(data.position.x, data.position.z);
 		chunk.blocks = Uint16Array.from(data.blocks);
+		chunk.shafts = data.shafts;
+		chunk.dirtyBlocks = data.dirtyBlocks;
 		return chunk;
+	}
+
+	public setIsVisible(visible: boolean): void {
+		this.isVisible = visible;
 	}
 
 	public getBlock(x: number, y: number, z: number): number {
 		if (!this.isInBounds(x, y, z)) return -1;
-		return this.blocks[this.index(x, y, z)];
+		return this.blocks[this.index(x, y, z)] ?? 0;
 	}
 
 	public setBlock(x: number, y: number, z: number, blockId: number): void {
@@ -50,15 +58,15 @@ export class Chunk {
 	}
 
 	public getBlockEntity(x: number, y: number, z: number) {
-		return this.blockEntities.get(`${x},${y},${z}`);
+		return this.blockEntities[`${x},${y},${z}`];
 	}
 
 	public setBlockEntity(x: number, y: number, z: number, entity: BlockEntity) {
-		this.blockEntities.set(`${x},${y},${z}`, entity);
+		this.blockEntities[`${x},${y},${z}`] = entity;
 	}
 
 	public removeBlockEntity(x: number, y: number, z: number) {
-		this.blockEntities.delete(`${x},${y},${z}`);
+		delete this.blockEntities[`${x},${y},${z}`];
 	}
 
 	public toJSON(): ChunkData {
@@ -66,6 +74,7 @@ export class Chunk {
 			position: this.position,
 			blocks: Array.from(this.blocks),
 			dirtyBlocks: this.dirtyBlocks,
+			shafts: this.shafts,
 		};
 	}
 
@@ -81,6 +90,6 @@ export class Chunk {
 	}
 
 	private index(x: number, y: number, z: number): number {
-		return y * ChunkManager.ChunkSize * ChunkManager.ChunkSize + z * ChunkManager.ChunkSize + x;
+		return y + x * ChunkManager.ChunkHeight + z * ChunkManager.ChunkHeight * ChunkManager.ChunkSize;
 	}
 }

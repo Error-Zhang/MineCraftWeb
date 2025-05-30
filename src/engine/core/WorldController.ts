@@ -2,6 +2,7 @@ import { ChunkManager } from "../chunk/ChunkManager.ts";
 import { BlockRegistry } from "../block/BlockRegistry.ts";
 import { Position } from "../types/chunk.type.ts";
 import Sky from "@engine/environment/Sky.ts";
+import { Chunk } from "@engine/chunk/Chunk.ts";
 
 export class WorldController {
 	private lastUpdatePos?: { x: number; z: number };
@@ -15,8 +16,8 @@ export class WorldController {
 	/**
 	 * 根据玩家位置更新区块和天空
 	 */
-	async updateChunk(position: Position) {
-		const { x, y, z } = position;
+	async updateChunk(position: { x: number; z: number }) {
+		const { x, z } = position;
 		const shouldUpdateSky =
 			!this.lastSkyPos ||
 			Math.max(Math.abs(x - this.lastSkyPos.x), Math.abs(z - this.lastSkyPos.z)) >
@@ -38,8 +39,16 @@ export class WorldController {
 		}
 	}
 
-	getColumnHeight(position: Position): number {
-		return this.chunkManager.getColumnHeight(position.x, position.z);
+	getColumnHeight(x: number, z: number): number {
+		return this.chunkManager.getColumnHeight(x, z);
+	}
+
+	onChunkUnload(callback: (chunk: Chunk) => void) {
+		this.chunkManager.onChunkUnload(callback);
+	}
+
+	onChunkUpdated(callback: (isInit: boolean) => void) {
+		this.chunkManager.onUpdated(callback);
 	}
 
 	/**

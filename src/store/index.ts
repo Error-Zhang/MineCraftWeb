@@ -24,13 +24,10 @@ export const useGameStore = create<GameStore>(set => ({
 
 export const usePlayerStore = create<PlayerStore>((set, get) => ({
 	playerId: 0,
-	position: { x: -112, y: 0, z: -112 },
+	origin: { x: -112, z: -112 },
 	holdBlockId: 0,
-	move: (x, y, z) => {
-		const pos = get().position;
-		return set({ position: { x: pos.x + x, y: pos.y + y, z: pos.z + z } });
-	},
-	reset: () => set({ playerId: 0, holdBlockId: 0, position: { x: -112, y: 0, z: -112 } }),
+	setOrigin: (x: number, z: number) => set({ origin: { x, z } }),
+	reset: () => set({ playerId: 0, holdBlockId: 0, origin: { x: -112, z: -112 } }),
 }));
 
 export const useWorldStore = create<WorldStore>(set => ({
@@ -40,29 +37,6 @@ export const useWorldStore = create<WorldStore>(set => ({
 }));
 
 export const useBlockStore = create<BlockStore>((set, get) => ({
-	blockTypes: {
-		byId: {},
-		byName: {},
-	},
 	blockRegistry: null,
-	transformBlockId: (blockId: number, to: "local" | "cloud") => {
-		if (!blockId) return 0;
-		const { blockTypes, blockRegistry } = get();
-
-		if (!blockRegistry) {
-			throw new Error("BlockRegistry not initialized");
-		}
-
-		if (to === "local") {
-			const name = blockTypes.byId[blockId];
-			if (!name) throw new Error(`Cloud block ID ${blockId} not found in blockReflect.byId`);
-			return blockRegistry.getByName(name).id!;
-		} else {
-			const def = blockRegistry.getById(blockId);
-			const cloudId = blockTypes.byName[def.blockType];
-			if (cloudId === undefined)
-				throw new Error(`Block name ${def.blockType} not found in blockReflect.byName`);
-			return cloudId;
-		}
-	},
+	extractBlockId: (value: number) => value & 0x3fff,
 }));

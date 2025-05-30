@@ -10,7 +10,7 @@ export class BlockRegistry extends SingleClass {
 	private namespaceToIdMap = new Map<string, Set<number>>();
 	private readonly DEFAULT_NAMESPACE = "minecraft";
 
-	private constructor() {
+	constructor() {
 		super();
 		this.tagManager = new TagManager();
 	}

@@ -1,23 +1,17 @@
-import { FreeCamera, Scene, Vector3 } from "@babylonjs/core";
-import { usePlayerStore } from "@/store";
+import { FreeCamera, Mesh, Scene, Vector3 } from "@babylonjs/core";
 import { PlayerInputSystem } from "@/game-root/player/PlayerInputSystem.ts";
+import { playerEvents } from "@/game-root/core/events.ts";
 
 // 基础相机类
 export abstract class BasePlayerCamera {
 	protected readonly scene: Scene;
-	protected readonly vector: { x: number; y: number; z: number };
 	protected readonly camera: FreeCamera;
 	protected readonly inputSystem: PlayerInputSystem;
 	protected moveValue = { x: 0, y: 0, z: 0 };
 
 	constructor(scene: Scene, canvas: HTMLCanvasElement) {
 		this.scene = scene;
-		this.vector = usePlayerStore.getState().position;
-		this.camera = new FreeCamera(
-			"Camera",
-			new Vector3(this.vector.x, this.vector.y, this.vector.z),
-			this.scene
-		);
+		this.camera = new FreeCamera("Camera", new Vector3(0, 0, 0), this.scene);
 		this.camera.minZ = 0.1;
 		this.camera.attachControl(canvas, true);
 		this.inputSystem = PlayerInputSystem.Instance;
@@ -27,8 +21,16 @@ export abstract class BasePlayerCamera {
 
 		this.scene.onBeforeRenderObservable.add(() => {
 			this.update();
-			usePlayerStore.setState({ position: this.vector });
 		});
+	}
+
+	public setChild(child: Mesh) {
+		child.setParent(this.camera);
+	}
+
+	public setPosition(position: Vector3): void {
+		this.camera.position = position;
+		this.camera.setTarget(new Vector3(0, position.y, 0));
 	}
 
 	// 射线拾取选中的方块信息，排除玩家自身碰撞体
@@ -48,7 +50,6 @@ export abstract class BasePlayerCamera {
 	protected initCamera(): void {
 		this.camera.inertia = 0.6;
 		this.camera.speed = 0.6;
-		this.camera.setTarget(new Vector3(0, this.vector.y, 0));
 	}
 
 	protected bindInput(): void {
@@ -60,18 +61,16 @@ export abstract class BasePlayerCamera {
 	}
 
 	protected update(): void {
-		// 应用移动
-		this.camera.position.addInPlace(
-			new Vector3(this.moveValue.x, this.moveValue.y, this.moveValue.z)
-		);
+		if (this.isMove()) {
+			// 应用移动
+			this.camera.position.addInPlace(
+				new Vector3(this.moveValue.x, this.moveValue.y, this.moveValue.z)
+			);
+			// 重置移动值
+			this.moveValue = { x: 0, y: 0, z: 0 };
 
-		// 更新位置状态
-		this.vector.x = this.camera.position.x;
-		this.vector.y = this.camera.position.y;
-		this.vector.z = this.camera.position.z;
-
-		// 重置移动值
-		this.moveValue = { x: 0, y: 0, z: 0 };
+			playerEvents.emit("move", this.camera.position);
+		}
 	}
 
 	protected abstract getMoveSpeed(): number;
@@ -98,6 +97,11 @@ export abstract class BasePlayerCamera {
 		const dir = direction.normalize().scale(move);
 		this.moveValue.x += dir.x;
 		this.moveValue.z += dir.z;
+	}
+
+	private isMove(): boolean {
+		const value = this.moveValue;
+		return Math.abs(value.x) > 0.1 || Math.abs(value.y) > 0.1 || Math.abs(value.z) > 0.1;
 	}
 }
 

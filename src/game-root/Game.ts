@@ -1,96 +1,163 @@
-import { Engine, Scene } from "@babylonjs/core";
+import { Scene, Vector3 } from "@babylonjs/core";
 import { AdvancedDynamicTexture, TextBlock } from "@babylonjs/gui";
 import { throttle } from "@/game-root/utils/lodash.ts";
 import { VoxelEngine } from "@engine/core/VoxelEngine.ts";
-import { ChunkData } from "@engine/types/chunk.type.ts";
+import { ChunkData, Coords, Position } from "@engine/types/chunk.type.ts";
 import { Chunk } from "@engine/chunk/Chunk.ts";
 import { blocks, getBlocksMap } from "@/game-root/block-definitions/blocks.ts";
 import Assets from "@/game-root/assets";
 import { useBlockStore, usePlayerStore, useWorldStore } from "@/store";
 import { Player } from "@/game-root/player/Player.ts";
-import { blockApi } from "@/api";
+import { blockApi, worldApi } from "@/api";
 import GameWindow from "@/game-root/core/GameWindow.ts";
 import { PlayerInputSystem } from "@/game-root/player/PlayerInputSystem.ts";
+import GameClient from "@/game-root/client/GameClient.ts";
+import { playerEvents } from "@/game-root/core/events.ts";
+import { IChunkSetting } from "@/game-root/client/interface.ts";
+import { WorldController } from "@engine/core/WorldController.ts";
+import { NpcPlayer } from "@/game-root/player/NpcPlayer.ts";
 
 // import { Inspector } from "@babylonjs/inspector";
 
 export class Game {
+	public canvas: HTMLCanvasElement;
 	private voxelEngine: VoxelEngine;
-	private engine: Engine;
-	private scene: Scene;
+	private scene!: Scene;
 	private player!: Player;
-	private canvas: HTMLCanvasElement;
+	private gameClient!: GameClient;
+	private npcPlayers: Map<number, NpcPlayer> = new Map();
 
 	constructor(canvas: HTMLCanvasElement) {
+		this.canvas = canvas;
 		GameWindow.create(canvas);
 		const voxel = new VoxelEngine(canvas);
-		this.canvas = canvas;
-		this.engine = voxel.engine;
-		this.scene = voxel.scene;
+		this.gameClient = new GameClient();
 		this.voxelEngine = voxel;
-		this.initBlock();
-		this.initChunk();
-		this.attachFPSDisplay();
+		this.registerBlocks();
 		voxel.onUpdate(() => {
 			PlayerInputSystem.Instance.update();
 		});
 	}
 
-	start() {
+	private get playerStore() {
+		return usePlayerStore.getState();
+	}
+
+	private get worldStore() {
+		return useWorldStore.getState();
+	}
+
+	public async start() {
 		console.log("Starting Game");
-		const worldController = useWorldStore.getState().worldController!;
-		const playerPos = usePlayerStore.getState().position;
+		this.scene = this.voxelEngine.createScene();
+		this.voxelEngine.loadTextures(this.scene, [{ key: "blocks", path: Assets.blocks.atlas }]);
 
-		this.voxelEngine.start();
-		worldController.updateChunk(playerPos).then(() => {
-			// 更新玩家y轴坐标
-			usePlayerStore.getState().move(0, worldController.getColumnHeight(playerPos) + 2, 0);
-			this.player = new Player(this.scene, this.canvas);
-		});
+		const chunkSetting = await this.gameClient.joinWorld(
+			this.worldStore.worldId,
+			this.playerStore.playerId
+		);
+
+		const worldController = this.registerChunk(chunkSetting);
+
+		this.player = new Player(this.scene, this.canvas);
+
+		await this.bindEvents(worldController);
+
+		this.voxelEngine.start(this.scene);
+
+		await worldController.updateChunk(this.playerStore.origin);
+
+		this.attachFPSDisplay(this.scene);
 	}
 
-	dispose() {
+	public dispose() {
 		this.voxelEngine.dispose();
-		useWorldStore.getState().reset();
-		this.player.dispose();
+		this.gameClient.disConnectAll();
+		this.npcPlayers.clear();
+		this.worldStore.reset();
+		this.playerStore.reset();
+		this.scene.dispose();
+		playerEvents.removeAllListeners();
 	}
 
-	destroy() {
+	public destroy() {
 		this.dispose();
-		this.scene.dispose();
-		this.engine.dispose();
 		GameWindow.Instance.dispose();
 	}
 
-	async flatWorldGenerator(chunkX: number, chunkZ: number) {
-		const chunkData: ChunkData = {
-			blocks: [],
-			dirtyBlocks: {},
-			position: {
-				x: chunkX,
-				z: chunkZ,
-			},
-		};
+	private async bindEvents(worldController: WorldController) {
+		const playerClient = this.gameClient.playerClient;
 
-		// 生成基础地形
-		for (let y = 0; y < 64; y++) {
-			const id = y == 4 ? 4 : y < 4 ? 3 : 0;
-			for (let z = 0; z < 16; z++) {
-				for (let x = 0; x < 16; x++) {
-					const index = y * 16 * 16 + z * 16 + x;
-					chunkData.blocks[index] = id;
-				}
+		playerClient.onPlayerJoined(playerId => {
+			const player = new NpcPlayer(this.scene, playerId);
+			this.initPlayerPosition(player.setPosition);
+			this.npcPlayers.set(playerId, player);
+		});
+
+		playerClient.onPlayerMove(moveData => {
+			const player = this.npcPlayers.get(moveData.playerId);
+			const { x, y, z } = moveData;
+			player?.moveTo(new Vector3(x, y, z));
+		});
+
+		playerClient.onPlayerLeave(playerId => {
+			const player = this.npcPlayers.get(playerId);
+			player?.dispose();
+		});
+
+		playerClient.onPlaceBlock(blockActionData => {
+			worldController.setBlock(blockActionData, blockActionData.blockId);
+		});
+
+		this.player.onPlaceBlock(playerClient.sendPlaceBlock);
+
+		playerEvents.on("move", (playerPos: Position) => {
+			worldController.updateChunk(playerPos);
+			playerClient.sendPlayerMove({ ...playerPos, playerId: this.playerStore.playerId });
+		});
+
+		worldController.onChunkUpdated(isInit => {
+			if (isInit) {
+				this.initPlayerPosition(this.player.setPosition);
 			}
-		}
-
-		return Chunk.fromJSON(chunkData);
+		});
 	}
 
-	/**
-	 * 在 Canvas 中右上角显示 FPS
-	 */
-	private attachFPSDisplay() {
-		const guiTexture = AdvancedDynamicTexture.CreateFullscreenUI("FPS-UI", true, this.scene);
+	private initPlayerPosition(setPosition: (position: Vector3) => void) {
+		const { x, z } = this.playerStore.origin;
+		const y = this.worldStore.worldController!.getColumnHeight(x, z) + 2;
+		setPosition(new Vector3(x, y, z));
+	}
+
+	private flatWorldGenerator() {
+		const generator = (chunkX: number, chunkZ: number) => {
+			const chunkData: ChunkData = {
+				blocks: [],
+				dirtyBlocks: {},
+				shafts: {},
+				position: {
+					x: chunkX,
+					z: chunkZ,
+				},
+			};
+
+			// 生成基础地形
+			for (let y = 0; y < 128; y++) {
+				const id = y == 4 ? 4 : y < 4 ? 3 : 0;
+				for (let z = 0; z < 16; z++) {
+					for (let x = 0; x < 16; x++) {
+						const index = y * 16 * 16 + z * 16 + x;
+						chunkData.blocks[index] = id;
+					}
+				}
+			}
+			return Chunk.fromJSON(chunkData);
+		};
+		return async (coords: Coords) => coords.map(coord => generator(coord.x, coord.z));
+	}
+
+	private attachFPSDisplay(scene: Scene) {
+		const guiTexture = AdvancedDynamicTexture.CreateFullscreenUI("FPS-UI", true, scene);
 
 		const fpsLabel = new TextBlock();
 		fpsLabel.color = "white";
@@ -101,43 +168,54 @@ export class Game {
 		fpsLabel.paddingTop = 10;
 
 		guiTexture.addControl(fpsLabel);
-		// 使用防抖包装 FPS 更新函数
+
 		const updateFPS = throttle(() => {
-			fpsLabel.text = `FPS: ${Math.floor(this.engine.getFps())}`;
+			fpsLabel.text = `FPS: ${Math.floor(this.voxelEngine.engine.getFps())}`;
 		}, 1000);
 
-		// 更新 FPS 显示
 		this.scene.onBeforeRenderObservable.add(updateFPS);
 	}
 
-	private initChunk() {
-		const worldController = this.voxelEngine.registerChunk(this.flatWorldGenerator.bind(this), {
-			chunkHeight: 64,
-		});
+	private registerChunk(chunkSetting: IChunkSetting) {
+		const worldController = this.voxelEngine.registerChunk(this.worldGenerator(), chunkSetting);
 		useWorldStore.setState({ worldController });
+		return worldController;
 	}
 
-	private initBlock() {
-		blockApi.getBlockTypes().then(blockTypes => {
-			useBlockStore.setState({ blockTypes });
-			// 验证客户端与服务器之间方块表是否完全匹配
-			const blocksMap = getBlocksMap();
-			Object.entries(blockTypes.byName).forEach(([blockType, blockId]) => {
-				if (blockId === 0) return;
-				if (!blocksMap[blockType]) {
-					throw new Error(`Block ${blockType} was not defined in website.`);
-				}
-			});
-			console.log("[Game] 方块表匹配成功");
-			// 合并方块表:服务器 > 客户端
-			const blockRegistry = this.voxelEngine.registerBlock({
-				textures: [{ key: "blocks", path: Assets.blocks.atlas }],
-				blocks: blocks.map(block => ({
-					...block,
-					id: blockTypes.byName[block.blockType] ?? block.id,
-				})),
-			});
-			useBlockStore.setState({ blockRegistry });
+	private worldGenerator() {
+		return async (coords: Coords) => {
+			const chunksData = await worldApi.generateChunks(this.worldStore.worldId, coords);
+
+			return chunksData.map((chunkData: { cells: number[]; shafts: any; x: number; z: number }) =>
+				Chunk.fromJSON({
+					blocks: chunkData.cells.map(id => useBlockStore.getState().extractBlockId(id)),
+					dirtyBlocks: {},
+					shafts: chunkData.shafts,
+					position: {
+						x: chunkData.x,
+						z: chunkData.z,
+					},
+				})
+			);
+		};
+	}
+
+	private async registerBlocks() {
+		const blockTypes = await blockApi.getBlockTypes();
+		// 验证客户端与服务器之间方块表是否完全匹配
+		const blocksMap = getBlocksMap();
+		Object.entries(blockTypes.byName).forEach(([blockType, blockId]) => {
+			if (blockId === 0) return;
+			if (!blocksMap[blockType]) {
+				throw new Error(`Block ${blockType} was not defined in website.`);
+			}
 		});
+		const combinBlocks = blocks.map(block => ({
+			...block,
+			id: blockTypes.byName[block.blockType] ?? block.id,
+		}));
+		// 合并方块表:服务器 > 客户端
+		const blockRegistry = this.voxelEngine.registerBlocks(combinBlocks);
+		useBlockStore.setState({ blockRegistry });
 	}
 }

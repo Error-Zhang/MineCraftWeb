@@ -9,15 +9,16 @@ export default defineConfig({
 			"@engine": "/src/engine",
 		},
 	},
-	assetsInclude: ['**/*.gltf', '**/*.glb'],
-	/*server: {
-		proxy: {
+	assetsInclude: ["**/*.gltf", "**/*.glb"],
+	server: {
+		port: 4110,
+		/*proxy: {
 			// 代理 API 请求
 			"/api": {
 				target: "http://localhost:5110/api", // 后端服务地址
 				changeOrigin: true,
 				rewrite: path => path.replace(/^\/api/, ""),
 			},
-		},
-	},*/
+		},*/
+	},
 });

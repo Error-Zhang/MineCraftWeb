@@ -3,13 +3,6 @@ import { openGameDialog } from "@/ui-root/components/game-dialog/dialogService.t
 
 export const BASE_URL = "http://localhost:5110";
 
-// 可选：定义统一的响应格式接口
-interface ApiResponse<T> {
-	code: number;
-	message: string;
-	data: T;
-}
-
 // 创建 Axios 实例
 const request: AxiosInstance = axios.create({
 	baseURL: BASE_URL + "/api", // 可根据环境变量设置
@@ -48,7 +41,7 @@ request.interceptors.response.use(
 		console.error("网络/服务器错误：", error);
 		openGameDialog({
 			title: "网络/服务器错误",
-			message: error,
+			message: error.message,
 		});
 		return Promise.reject(error);
 	}

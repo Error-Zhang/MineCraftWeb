@@ -1,5 +1,5 @@
 import { del, get, post, put } from "./request.ts";
-import { IBlockReflect, IPlayer, IUser, IWorld } from "./interface.ts";
+import { IBlockReflect, IChunkData, IPlayer, IUser, IWorld } from "./interface.ts";
 import { useUserStore } from "@/store";
 
 const getUserId = () => useUserStore.getState().userId;
@@ -46,6 +46,10 @@ export const worldApi = {
 	// 删除一个世界
 	deleteWorld(worldId: number) {
 		return del(`/world?worldId=${worldId}&userId=${getUserId()}`);
+	},
+
+	generateChunks(worldId: number, coords: { x: number; z: number }[]) {
+		return post<IChunkData[]>(`/chunk/generate/${worldId}`, coords);
 	},
 };
 

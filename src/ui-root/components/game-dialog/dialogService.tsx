@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import GameDialog from "./index.tsx";
 
 let container: HTMLDivElement | null = null;
+let isDialogOpen: boolean = false;
 
 export interface ConfirmOptions {
 	title: string;
@@ -12,6 +13,9 @@ export interface ConfirmOptions {
 }
 
 export const openGameDialog = (options: ConfirmOptions) => {
+	if (isDialogOpen) return;
+	isDialogOpen = true;
+
 	const wrapper = document.getElementById("game-ui-wrapper");
 	if (!wrapper) {
 		console.error("game-ui-wrapper element not found");
@@ -30,6 +34,7 @@ export const openGameDialog = (options: ConfirmOptions) => {
 		container && container.remove();
 		container = null;
 		options.onCancel?.();
+		isDialogOpen = false;
 	};
 
 	const handleConfirm = () => {
@@ -37,6 +42,7 @@ export const openGameDialog = (options: ConfirmOptions) => {
 		container && container.remove();
 		container = null;
 		options.onConfirm?.();
+		isDialogOpen = false;
 	};
 
 	root.render(

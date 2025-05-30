@@ -87,27 +87,32 @@ export class WorldRenderer {
 		return this.renderers.get(key);
 	}
 
-	public setChunkVisibility(key: string, visible: boolean) {
-		const renderer = this.renderers.get(key);
-		if (renderer) {
-			renderer.setEnabled(visible);
-		}
+	public setChunkVisibility(chunk: Chunk) {
+		const renderer = this.getRenderer(chunk.Key);
+		renderer?.setEnabled(chunk.isVisible);
+	}
+
+	public rebuildChunk(chunk: Chunk) {
+		const renderer = this.renderers.get(chunk.Key);
+		renderer?.build();
 	}
 
 	public buildChunk(chunk: Chunk) {
-		if (chunk.isVisible && !this.renderers.has(chunk.Key)) {
-			this.createChunkRenderer(chunk);
-		} else {
-			this.setChunkVisibility(chunk.Key, chunk.isVisible);
+		// 防止渲染已经卸载的区块导致内存泄露
+		if (chunk.isVisible) {
+			if (!this.renderers.has(chunk.Key)) {
+				this.createChunkRenderer(chunk);
+			} else if (chunk.edges.length) {
+				this.rebuildChunk(chunk);
+			}
 		}
+		// this.setChunkVisibility(chunk);
 	}
 
 	public unloadChunk(key: string) {
 		const renderer = this.renderers.get(key);
-		if (renderer) {
-			renderer.dispose();
-			this.renderers.delete(key);
-		}
+		renderer?.dispose();
+		this.renderers.delete(key);
 	}
 
 	public dispose() {

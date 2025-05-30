@@ -3,37 +3,27 @@ import { WorldClient } from "./WorldClient.ts";
 import { BASE_URL } from "@/api/request.ts";
 
 class GameClient {
-	private static instance: GameClient | null = null;
-	private static isConnecting = false;
-	private static connectPromise: Promise<GameClient> | null = null;
-	public player: PlayerClient;
-	public world: WorldClient;
+	public playerClient: PlayerClient;
+	public worldClient: WorldClient;
 
-	private constructor(baseUrl: string) {
-		this.player = new PlayerClient(`${baseUrl}/playerhub`);
-		this.world = new WorldClient(`${baseUrl}/worldhub`);
+	constructor(baseUrl: string = BASE_URL) {
+		this.playerClient = new PlayerClient(`${baseUrl}/playerhub`);
+		this.worldClient = new WorldClient(`${baseUrl}/worldhub`);
+		this.playerClient.bindWorldClient(this.worldClient);
 	}
 
-	public static getInstance(baseUrl = BASE_URL): Promise<GameClient> {
-		if (GameClient.instance) return Promise.resolve(GameClient.instance);
-		if (GameClient.connectPromise) return GameClient.connectPromise;
+	public async disConnectAll() {
+		await Promise.all([this.playerClient.disconnect(), this.worldClient.disconnect()]);
+	}
 
-		GameClient.connectPromise = new Promise(async (resolve, reject) => {
-			try {
-				const client = new GameClient(baseUrl);
-				await client.connectAll();
-				GameClient.instance = client;
-				resolve(client);
-			} catch (err) {
-				reject(err);
-			}
-		});
-
-		return GameClient.connectPromise;
+	public async joinWorld(worldId: number, playerId: number) {
+		await this.connectAll();
+		await this.playerClient.joinWorld(worldId, playerId);
+		return await this.worldClient.joinWorld(worldId, playerId);
 	}
 
 	private async connectAll() {
-		await Promise.all([this.player.connect(), this.world.connect()]);
+		await Promise.all([this.playerClient.connect(), this.worldClient.connect()]);
 	}
 }
 

@@ -1,17 +1,11 @@
 // PlayerClient.ts
 import * as signalR from "@microsoft/signalr";
-
-export interface PlayerMoveData {
-	playerId: string;
-	x: number;
-	y: number;
-	z: number;
-}
-
-type MoveCallback = (data: PlayerMoveData) => void;
+import { ApiResponse, IBlockActionData, IPlayerMoveData } from "@/game-root/client/interface.ts";
+import { WorldClient } from "@/game-root/client/WorldClient.ts";
 
 export class PlayerClient {
 	private connection: signalR.HubConnection;
+	private worldClient!: WorldClient;
 
 	constructor(hubUrl: string) {
 		this.connection = new signalR.HubConnectionBuilder()
@@ -20,11 +14,13 @@ export class PlayerClient {
 			.build();
 	}
 
+	bindWorldClient(worldClient: WorldClient) {
+		this.worldClient = worldClient;
+	}
+
 	async connect() {
 		await this.connection.start();
 		console.log("[PlayerClient] Connected");
-
-		this.connection.on("ReceivePlayerMove", (data: PlayerMoveData) => {});
 	}
 
 	async disconnect() {
@@ -32,9 +28,36 @@ export class PlayerClient {
 		console.log("[PlayerClient] Disconnected");
 	}
 
-	async sendMove(data: PlayerMoveData) {
+	async sendPlayerMove(data: IPlayerMoveData) {
 		await this.connection.invoke("PlayerMove", data);
 	}
 
-	onPlayerMove(callback: MoveCallback) {}
+	async sendPlaceBlock(position: { x: number; y: number; z: number }, blockId: number) {
+		let data: IBlockActionData = { ...position, blockId };
+		await this.worldClient.setBlock(data);
+		await this.connection.invoke("PlaceBlock", data);
+	}
+
+	onPlayerMove(callback: (data: IPlayerMoveData) => void) {
+		this.connection.on("PlayerMove", callback);
+	}
+
+	onPlaceBlock(callback: (data: IBlockActionData) => void) {
+		this.connection.on("PlaceBlock", callback);
+	}
+
+	onPlayerJoined(callback: (playerId: number) => void) {
+		this.connection.on("PlayerJoined", callback);
+	}
+
+	onPlayerLeave(callback: (playerId: number) => void) {
+		this.connection.on("PlayerLeave", callback);
+	}
+
+	async joinWorld(worldId: number, playerId: number) {
+		const response = await this.connection.invoke<ApiResponse<any>>("JoinWorld", worldId, playerId);
+		if (response.code !== 200) {
+			throw new Error(`Can't join player because ${response.message}`);
+		}
+	}
 }

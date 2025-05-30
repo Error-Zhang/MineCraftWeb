@@ -38,7 +38,7 @@ export class ChunkRenderer {
 		this.build(toUpdate);
 	}
 
-	public build(filter?: Set<string>) {
+	public build(filter: Set<string> = this.renderedBlocks) {
 		this.root.dispose();
 		const { meshGroups, modelBlocks, renderedBlocks } = ChunkMeshBuilder.build(this.chunk, filter);
 		this.renderedBlocks = renderedBlocks;
@@ -49,7 +49,7 @@ export class ChunkRenderer {
 			this.createMesh(matKey, vertexData, material);
 		}
 
-		if (!filter) {
+		if (!filter.size) {
 			this.buildModelBlocks(modelBlocks);
 		}
 	}
