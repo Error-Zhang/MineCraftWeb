@@ -115,7 +115,8 @@ export class Game {
 
 		playerEvents.on("move", (playerPos: Position) => {
 			worldController.updateChunk(playerPos);
-			playerClient.sendPlayerMove({ ...playerPos, playerId: this.playerStore.playerId });
+			const { x, y, z } = playerPos;
+			playerClient.sendPlayerMove({ x, y, z, playerId: this.playerStore.playerId });
 		});
 
 		worldController.onChunkUpdated(isInit => {
@@ -126,16 +127,17 @@ export class Game {
 	}
 
 	private initPlayerPosition(setPosition: (position: Vector3) => void) {
-		const { x, z } = this.playerStore.origin;
-		const y = this.worldStore.worldController!.getColumnHeight(x, z) + 2;
-		setPosition(new Vector3(x, y, z));
+		const [x, y, z] = this.worldStore.worldController!.getChunkCenterTop(
+			this.playerStore.origin.x,
+			this.playerStore.origin.z
+		);
+		setPosition(new Vector3(x, y + 2, z));
 	}
 
 	private flatWorldGenerator() {
 		const generator = (chunkX: number, chunkZ: number) => {
 			const chunkData: ChunkData = {
-				blocks: [],
-				dirtyBlocks: {},
+				blocks: new Uint16Array(),
 				shafts: [],
 				position: {
 					x: chunkX,
@@ -195,7 +197,6 @@ export class Game {
 							chunkData.cells,
 							useBlockStore.getState().extractBlockId
 						),
-						dirtyBlocks: {},
 						shafts: chunkData.shafts,
 						position: {
 							x: chunkData.x,

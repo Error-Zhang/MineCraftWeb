@@ -61,7 +61,7 @@ export class BlockRegistry extends SingleClass {
 	}
 
 	public getById(id: number) {
-		if (id === 0 || id === -1) return {} as BlockDefinition<any>;
+		if (id === 0 || id === -1) return null;
 		const definition = this.blocks[id];
 		if (!definition) throw new Error(`Block ${id} not found`);
 		return this.blocks[id];

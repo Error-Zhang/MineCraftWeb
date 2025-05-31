@@ -93,20 +93,19 @@ export class WorldRenderer {
 	}
 
 	public rebuildChunk(chunk: Chunk) {
-		const renderer = this.renderers.get(chunk.Key);
-		renderer?.build();
+		const renderer = this.renderers.get(chunk.Key)!;
+		renderer.build();
 	}
 
 	public buildChunk(chunk: Chunk) {
-		// 防止渲染已经卸载的区块导致内存泄露
 		if (chunk.isVisible) {
 			if (!this.renderers.has(chunk.Key)) {
 				this.createChunkRenderer(chunk);
-			} else if (chunk.edges.length) {
+			} else if (chunk.edges.size) {
 				this.rebuildChunk(chunk);
 			}
 		}
-		// this.setChunkVisibility(chunk);
+		this.setChunkVisibility(chunk);
 	}
 
 	public unloadChunk(key: string) {

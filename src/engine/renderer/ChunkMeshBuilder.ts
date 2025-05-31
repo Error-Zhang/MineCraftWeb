@@ -4,6 +4,32 @@ import { BlockRegistry } from "@engine/block/BlockRegistry";
 import { CrossRender, CubeRender, RenderComponent, RenderMaterial } from "../types/block.type.ts";
 import { ChunkManager } from "@engine/chunk/ChunkManager.ts";
 
+export const EdgeConfigs = [
+	{
+		edge: 0, // 左边界 (-X)
+		dx: -1,
+		dz: 0,
+		getCoords: (i: number, y: number) => [0, y, i],
+	},
+	{
+		edge: 1, // 右边界 (+X)
+		dx: 1,
+		dz: 0,
+		getCoords: (i: number, y: number) => [ChunkManager.ChunkSize - 1, y, i],
+	},
+	{
+		edge: 2, // 下边界 (-Z)
+		dx: 0,
+		dz: -1,
+		getCoords: (i: number, y: number) => [i, y, 0],
+	},
+	{
+		edge: 3, // 上边界 (+Z)
+		dx: 0,
+		dz: 1,
+		getCoords: (i: number, y: number) => [i, y, ChunkManager.ChunkSize - 1],
+	},
+];
 export const FaceDirectionOffset: [number, number, number][] = [
 	[0, 0, 1], // front (z+)
 	[0, 0, -1], // back (z-)
@@ -76,8 +102,8 @@ export class ChunkMeshBuilder {
 		const worldZ = chunk.position.z * size;
 		const renderedBlocks = new Set<string>();
 		const modelBlocks = new Map<string, number>();
-
 		if (filter && filter.size) {
+			this.processChunkEdges(chunk, size, height, mergeGroups, renderedBlocks, modelBlocks);
 			this.processFilteredBlocks(
 				chunk,
 				filter,
@@ -87,7 +113,6 @@ export class ChunkMeshBuilder {
 				renderedBlocks,
 				modelBlocks
 			);
-			this.processChunkEdges(chunk, size, height, mergeGroups, renderedBlocks, modelBlocks);
 		} else {
 			this.processAllBlocks(
 				chunk,
@@ -118,8 +143,10 @@ export class ChunkMeshBuilder {
 		modelBlocks: Map<string, number>
 	) {
 		for (const key of filter) {
-			const [x, y, z] = key.split(",").map(Number);
-			this.processBlock(chunk, x, y, z, worldX, worldZ, mergeGroups, renderedBlocks, modelBlocks);
+			if (!renderedBlocks.has(key)) {
+				const [x, y, z] = key.split(",").map(Number);
+				this.processBlock(chunk, x, y, z, worldX, worldZ, mergeGroups, renderedBlocks, modelBlocks);
+			}
 		}
 	}
 
@@ -131,43 +158,29 @@ export class ChunkMeshBuilder {
 		renderedBlocks: Set<string>,
 		modelBlocks: Map<string, number>
 	) {
-		if (!chunk.edges.length) return;
+		if (!chunk.edges.size) return;
+		for (const { edge, getCoords } of EdgeConfigs) {
+			if (!chunk.edges.has(edge)) continue;
 
-		const edgeConfigs = [
-			{ edge: 0, getCoords: (x: number, y: number, z: number) => [0, y, z] },
-			{ edge: 1, getCoords: (x: number, y: number, z: number) => [size - 1, y, z] },
-			{ edge: 2, getCoords: (x: number, y: number, z: number) => [x, y, 0] },
-			{ edge: 3, getCoords: (x: number, y: number, z: number) => [x, y, size - 1] },
-		];
-
-		for (let y = 0; y < height; y++) {
-			for (const { edge, getCoords } of edgeConfigs) {
-				if (chunk.edges.includes(edge)) {
-					const isXEdge = edge < 2;
-					const range = size;
-					const fixedCoord = y;
-
-					for (let i = 0; i < range; i++) {
-						const [x, y, z] = getCoords(isXEdge ? 0 : i, fixedCoord, isXEdge ? i : 0);
-						const key = `${x},${y},${z}`;
-						if (!renderedBlocks.has(key)) {
-							this.processBlock(
-								chunk,
-								x,
-								y,
-								z,
-								chunk.position.x * size,
-								chunk.position.z * size,
-								mergeGroups,
-								renderedBlocks,
-								modelBlocks
-							);
-						}
-					}
+			for (let y = 0; y < height; y++) {
+				for (let i = 0; i < size; i++) {
+					const [x, yCoord, z] = getCoords(i, y);
+					this.processBlock(
+						chunk,
+						x,
+						yCoord,
+						z,
+						chunk.position.x * size,
+						chunk.position.z * size,
+						mergeGroups,
+						renderedBlocks,
+						modelBlocks
+					);
 				}
 			}
 		}
-		chunk.edges.length = 0;
+
+		chunk.edges.clear();
 	}
 
 	private static processAllBlocks(
@@ -280,7 +293,7 @@ export class ChunkMeshBuilder {
 			const neighborId = ChunkManager.getBlockAt(nx, ny, nz);
 			const neighbor = BlockRegistry.Instance.getById(neighborId);
 
-			let shouldRender = this.shouldRenderFace(blockId, neighborId, render, neighbor.render);
+			let shouldRender = this.shouldRenderFace(blockId, neighborId, render, neighbor?.render);
 			if (shouldRender) {
 				let surfaceColor = i === 4 ? render.material.surfaceColor : undefined;
 				this.addFace(target, posX, posY, posZ, i, render.uvs[i], surfaceColor);
@@ -332,7 +345,7 @@ export class ChunkMeshBuilder {
 		currentId: number,
 		neighborId: number,
 		currentRender: CubeRender,
-		neighborRender: RenderComponent
+		neighborRender?: RenderComponent
 	): boolean {
 		// 超出范围，不渲染
 		if (neighborId === -1) return false;
@@ -343,15 +356,17 @@ export class ChunkMeshBuilder {
 		if (neighborId === currentId) return false;
 
 		// 3.邻居不是立方体，应该渲染
-		if (neighborRender.type !== "cube") return true;
+		if (neighborRender) {
+			if (neighborRender.type !== "cube") return true;
 
-		switch (currentRender.transparencyType) {
-			case "opaque":
-				return neighborRender.transparencyType !== "opaque";
-			case "cutout":
-				return neighborRender.transparencyType === "transparent";
-			case "transparent":
-				return false;
+			switch (currentRender.transparencyType) {
+				case "opaque":
+					return neighborRender.transparencyType !== "opaque";
+				case "cutout":
+					return neighborRender.transparencyType === "transparent";
+				case "transparent":
+					return false;
+			}
 		}
 
 		// 其他情况，默认渲染

@@ -1,7 +1,6 @@
 export interface ChunkData {
-	blocks: number[];
+	blocks: Uint16Array;
 	position: { x: number; z: number };
-	dirtyBlocks: Record<string, number>;
 	shafts: number[];
 }
 

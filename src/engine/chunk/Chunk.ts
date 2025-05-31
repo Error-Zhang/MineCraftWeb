@@ -4,41 +4,29 @@ import { BlockRegistry } from "@engine/block/BlockRegistry.ts";
 import { BlockEntity } from "@engine/types/block.type.ts";
 
 export class Chunk {
-	public readonly position: { x: number; z: number };
-
-	public blocks: Uint16Array; // 最多支持65536种不同方块
-	// 该属性影响是否需要重新渲染
-	public isDirty: boolean = false;
-	// 该属性影响是否渲染
-	public isVisible: boolean = true;
-	// 该属性表示区块的边界状态 [0,1,2,3] 分别表示 x-,x+,z-,z+ 边界
-	public edges: number[] = [];
-
-	public dirtyBlocks: Record<string, number> = {};
+	public position!: { x: number; z: number };
+	public blocks!: Uint16Array;
+	public edges: Set<number> = new Set();
 	public blockEntities: Record<string, BlockEntity> = {};
 	public shafts: ChunkData["shafts"] = [];
+	public isVisible: boolean = true;
 
-	constructor(x: number, z: number) {
-		this.position = { x, z };
-		this.blocks = new Uint16Array(
-			ChunkManager.ChunkSize * ChunkManager.ChunkSize * ChunkManager.ChunkHeight
-		);
-	}
+	constructor() {}
 
 	public get Key() {
 		return `${this.position.x},${this.position.z}`;
 	}
 
 	public static fromJSON(data: ChunkData): Chunk {
-		const chunk = new Chunk(data.position.x, data.position.z);
-		chunk.blocks = Uint16Array.from(data.blocks);
-		chunk.shafts = data.shafts;
-		chunk.dirtyBlocks = data.dirtyBlocks;
+		const chunk = new Chunk();
+		chunk.setData(data);
 		return chunk;
 	}
 
-	public setIsVisible(visible: boolean): void {
-		this.isVisible = visible;
+	public setData(data: ChunkData) {
+		this.position = data.position;
+		this.blocks = data.blocks;
+		this.shafts = data.shafts;
 	}
 
 	public getBlock(x: number, y: number, z: number): number {
@@ -46,11 +34,9 @@ export class Chunk {
 		return this.blocks[this.index(x, y, z)] ?? 0;
 	}
 
-	public setBlock(x: number, y: number, z: number, blockId: number): void {
+	public setBlock(x: number, y: number, z: number, blockId: number) {
 		if (!this.isInBounds(x, y, z)) return;
 		this.blocks[this.index(x, y, z)] = blockId;
-		this.dirtyBlocks[`${x},${y},${z}`] = blockId;
-		this.isDirty = true;
 		const def = BlockRegistry.Instance.getById(blockId);
 		if (def?.createEntity) {
 			this.setBlockEntity(x, y, z, def.createEntity());
@@ -67,15 +53,6 @@ export class Chunk {
 
 	public removeBlockEntity(x: number, y: number, z: number) {
 		delete this.blockEntities[`${x},${y},${z}`];
-	}
-
-	public toJSON(): ChunkData {
-		return {
-			position: this.position,
-			blocks: Array.from(this.blocks),
-			dirtyBlocks: this.dirtyBlocks,
-			shafts: this.shafts,
-		};
 	}
 
 	public isInBounds(x: number, y: number, z: number): boolean {

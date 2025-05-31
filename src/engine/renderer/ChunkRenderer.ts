@@ -34,7 +34,6 @@ export class ChunkRenderer {
 				toUpdate.add(nk);
 			}
 		}
-		if (!toUpdate.size) return;
 		this.build(toUpdate);
 	}
 
@@ -42,14 +41,13 @@ export class ChunkRenderer {
 		this.root.dispose();
 		const { meshGroups, modelBlocks, renderedBlocks } = ChunkMeshBuilder.build(this.chunk, filter);
 		this.renderedBlocks = renderedBlocks;
-
 		// 创建网格
 		for (const [matKey, vertexData] of Object.entries(meshGroups)) {
 			const material = BlockMaterialManager.getMaterialByKey(this.scene, matKey);
 			this.createMesh(matKey, vertexData, material);
 		}
 
-		if (!filter.size) {
+		if (!filter) {
 			this.buildModelBlocks(modelBlocks);
 		}
 	}

@@ -94,6 +94,8 @@ export abstract class BasePlayerCamera {
 	protected moveByDirection(direction: Vector3): void {
 		const speedMultiplier = this.inputSystem.isActionActive("sprint") ? 2 : 1;
 		const move = this.getMoveSpeed() * speedMultiplier;
+		// 只保留水平方向的移动，忽略垂直分量
+		direction.y = 0;
 		const dir = direction.normalize().scale(move);
 		this.moveValue.x += dir.x;
 		this.moveValue.z += dir.z;

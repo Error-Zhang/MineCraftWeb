@@ -5,9 +5,9 @@ const EPSILON = 1e-6;
 class MathUtils {
 	static generateGUID = v4;
 
-	static decompressRLE(compressed: number[], decode?: (value: number) => number): number[] {
+	static decompressRLE(compressed: number[], decode?: (value: number) => number): Uint16Array {
 		if (!compressed || compressed.length === 0) {
-			return [];
+			throw new Error("Compressed value must be greater than 0");
 		}
 
 		// 先计算解压后数组的长度
@@ -16,7 +16,7 @@ class MathUtils {
 			length += compressed[i];
 		}
 
-		const result: number[] = new Array(length);
+		const result = new Uint16Array(length);
 		let pos = 0;
 
 		for (let i = 0; i < compressed.length; i += 2) {

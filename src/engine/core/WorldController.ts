@@ -39,8 +39,10 @@ export class WorldController {
 		}
 	}
 
-	getColumnHeight(x: number, z: number): number {
-		return this.chunkManager.getColumnHeight(x, z);
+	getChunkCenterTop(x: number, z: number): [number, number, number] {
+		const [chunkX, chunkZ] = this.chunkManager.worldToChunk(x, z);
+		const [centerX, centerZ] = this.chunkManager.getChunkCenter(chunkX, chunkZ);
+		return [centerX, this.chunkManager.getColumnHeight(x, z), centerZ];
 	}
 
 	onChunkUnload(callback: (chunk: Chunk) => void) {
@@ -64,8 +66,8 @@ export class WorldController {
 	 */
 	setBlock(position: Position, blockId: number) {
 		const isModel =
-			BlockRegistry.Instance.getById(blockId).render?.type === "model" ||
-			this.getBlock(position).render?.type === "model";
+			BlockRegistry.Instance.getById(blockId)?.render?.type === "model" ||
+			this.getBlock(position)?.render?.type === "model";
 		// 设置方块
 		ChunkManager.setBlockAt(position.x, position.y, position.z, blockId, isModel);
 	}
