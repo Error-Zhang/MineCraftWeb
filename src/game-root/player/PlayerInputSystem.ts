@@ -164,11 +164,11 @@ export class PlayerInputSystem {
 
 		// 键盘事件
 		window.addEventListener("keydown", e => this.handleKey(e.code, true));
-		window.addEventListener("keyup", e => this.handleKey(e.code, false));
+		window.addEventListener("keyup", e => this.handleKey(e.code, false), false);
 
 		// 鼠标事件
 		window.addEventListener("mousedown", e => this.handleKey(`Mouse${e.button}`, true));
-		window.addEventListener("mouseup", e => this.handleKey(`Mouse${e.button}`, false));
+		window.addEventListener("mouseup", e => this.handleKey(`Mouse${e.button}`, false), false);
 	}
 
 	private handleKey(code: string, isDown: boolean) {

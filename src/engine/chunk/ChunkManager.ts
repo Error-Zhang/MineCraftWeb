@@ -33,8 +33,8 @@ export class ChunkManager extends SingleClass {
 	private isInited: boolean = true;
 	private unloadTimer: number | null = null;
 	private chunksToUnload: Map<string, number> = new Map(); // 存储区块key和标记时间戳
-	private readonly UNLOAD_DELAY = 1000 * 60; // 60秒后卸载
-	private readonly POLLING_TIME = 1000; // 每秒检查一次
+	private readonly UNLOAD_DELAY = 1000 * 60 * 5; // 60秒后卸载
+	private readonly POLLING_TIME = 1000 * 10; // 每分检查一次
 
 	constructor(generator: (coords: Coords) => Promise<Chunk[]>, worldRenderer: WorldRenderer) {
 		super();
@@ -71,6 +71,12 @@ export class ChunkManager extends SingleClass {
 		}
 	}
 
+	public getEnvironment(x: number, z: number) {
+		const [chunkX, chunkZ, localX, localZ] = this.worldToChunk(x, z);
+		const chunk = this.getChunk(chunkX, chunkZ);
+		return chunk?.getEnvironment(x, z) || -1;
+	}
+
 	public onChunkLoad(callback: (chunk: Chunk) => void) {
 		this.loadCallbacks.push(callback);
 	}
@@ -81,6 +87,7 @@ export class ChunkManager extends SingleClass {
 
 	public async updateChunksAround(x: number, z: number) {
 		await this.withUpdateLock(async () => {
+			const start = performance.now();
 			try {
 				console.log("[VoxelEngine] chunk updating");
 				const [chunkX, chunkZ] = this.worldToChunk(x, z);
@@ -96,7 +103,7 @@ export class ChunkManager extends SingleClass {
 					const dist = this.getChunkDistance(cx, cz, chunkX, chunkZ);
 					const chunk = this.getChunk(cx, cz)!;
 					chunk.isVisible = dist <= ChunkManager.ViewDistance;
-					if (dist > ChunkManager.UnloadDistance * 1.5) {
+					if (dist > ChunkManager.UnloadDistance * 2) {
 						this.unloadChunk(chunk);
 					} else if (dist > ChunkManager.UnloadDistance) {
 						this.scheduleUnloadChunk(chunk);
@@ -161,7 +168,8 @@ export class ChunkManager extends SingleClass {
 				this.updatedCallbacks.forEach(callback => callback(this.isInited));
 				this.updateChunkEdges();
 				this.isInited = false;
-				console.log("[VoxelEngine] 区块更新完成");
+				const end = performance.now();
+				console.log(`[VoxelEngine] 区块更新完成，处理耗时: ${(end - start).toFixed(2)} ms`);
 			}
 		});
 	}

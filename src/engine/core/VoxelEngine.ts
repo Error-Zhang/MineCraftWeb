@@ -7,10 +7,9 @@ import { WorldRenderer } from "../renderer/WorldRenderer";
 import { waterFragmentShader, waterVertexShader } from "../shaders/water";
 import { lavaFragmentShader, lavaVertexShader } from "../shaders/lava";
 import { Chunk } from "../chunk/Chunk.ts";
-import Sky from "../environment/Sky.ts";
+import { Environment } from "../environment/Environment.ts";
 import { WorldController } from "./WorldController.ts";
 import { GameTime } from "../systems/GameTime";
-import { LiquidManager } from "../liquid/LiquidManager";
 import { Coords } from "@engine/types/chunk.type.ts";
 import { Singleton } from "@engine/core/Singleton.ts";
 // 注册着色器
@@ -26,8 +25,7 @@ export class VoxelEngine {
 	private blockRegistry!: BlockRegistry;
 	private chunkManager!: ChunkManager;
 	private worldRenderer!: WorldRenderer;
-	private sky!: Sky;
-	private liquidManager!: LiquidManager;
+	private sky!: Environment;
 
 	private animationCallbacks: Set<() => void> = new Set();
 	private disposers: (() => void)[] = [];
@@ -43,7 +41,7 @@ export class VoxelEngine {
 
 	public dispose() {
 		for (const dispose of this.disposers) dispose();
-		ChunkManager.Instance.dispose();
+		this.chunkManager.dispose();
 		this.worldRenderer.dispose();
 		this.engine.stopRenderLoop();
 	}
@@ -54,9 +52,15 @@ export class VoxelEngine {
 		this.animationCallbacks.clear();
 	}
 
-	public onUpdate(callback: () => void): () => void {
+	public onUpdate(callback: () => void, dispose: (() => void) | boolean = true): () => void {
 		this.animationCallbacks.add(callback);
-		const disposer = () => this.animationCallbacks.delete(callback);
+		if (dispose instanceof Function) this.disposers.push(dispose);
+		// 创建取消订阅的函数
+		const disposer = () => {
+			if (dispose) {
+				this.animationCallbacks.delete(callback);
+			}
+		};
 		this.disposers.push(disposer);
 		return disposer;
 	}
@@ -66,18 +70,23 @@ export class VoxelEngine {
 		scene.gravity = new Vector3(0, -0.1, 0);
 		scene.collisionsEnabled = true;
 		this.gameTime = new GameTime();
-		// 设置游戏时间为正午（12:00）
-		this.gameTime.setTime(12 * 3600);
-		this.sky = new Sky(scene, this.gameTime);
+		this.sky = Singleton.create(Environment, scene, this.gameTime);
 		this.worldRenderer = new WorldRenderer(scene);
 		return scene;
 	}
 
 	public start(scene: Scene) {
-		this.onUpdate(() => {
-			// 更新游戏时间
-			this.gameTime.update(this.engine.getDeltaTime() / 1000);
-		});
+		this.onUpdate(
+			() => {
+				// 更新游戏时间
+				this.gameTime.update(this.engine.getDeltaTime() / 1000);
+				this.sky.updateLighting();
+			},
+			() => {
+				this.gameTime.reset();
+				this.sky.dispose();
+			}
+		);
 		this.engine.runRenderLoop(() => {
 			scene.render();
 			for (const cb of this.animationCallbacks) cb();

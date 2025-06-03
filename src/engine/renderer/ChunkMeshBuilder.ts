@@ -1,8 +1,9 @@
-import { Color4, Vector4, VertexData } from "@babylonjs/core";
+import { Color3, Color4, VertexData } from "@babylonjs/core";
 import { Chunk } from "../chunk/Chunk.ts";
-import { BlockRegistry } from "@engine/block/BlockRegistry";
+import { BlockRegistry } from "../block/BlockRegistry";
+import { BlockDataProcessor } from "../block/BlockDataProcessor.ts";
 import { CrossRender, CubeRender, RenderComponent, RenderMaterial } from "../types/block.type.ts";
-import { ChunkManager } from "@engine/chunk/ChunkManager.ts";
+import { ChunkManager } from "../chunk/ChunkManager.ts";
 
 export const EdgeConfigs = [
 	{
@@ -94,58 +95,49 @@ interface MeshData {
 	material?: RenderMaterial;
 }
 
+interface MeshBuilderContext {
+	mergeGroups: Map<string, MeshData>;
+	renderedBlocks: Set<string>;
+	modelBlocks: Map<string, number>;
+	worldX: number;
+	worldZ: number;
+}
+
 export class ChunkMeshBuilder {
 	public static build(chunk: Chunk, filter?: Set<string>) {
-		const mergeGroups = new Map<string, MeshData>();
+		const context: MeshBuilderContext = {
+			mergeGroups: new Map<string, MeshData>(),
+			renderedBlocks: new Set<string>(),
+			modelBlocks: new Map<string, number>(),
+			worldX: chunk.position.x * ChunkManager.ChunkSize,
+			worldZ: chunk.position.z * ChunkManager.ChunkSize,
+		};
+
 		const [size, height] = [ChunkManager.ChunkSize, ChunkManager.ChunkHeight];
-		const worldX = chunk.position.x * size;
-		const worldZ = chunk.position.z * size;
-		const renderedBlocks = new Set<string>();
-		const modelBlocks = new Map<string, number>();
+
 		if (filter && filter.size) {
-			this.processChunkEdges(chunk, size, height, mergeGroups, renderedBlocks, modelBlocks);
-			this.processFilteredBlocks(
-				chunk,
-				filter,
-				worldX,
-				worldZ,
-				mergeGroups,
-				renderedBlocks,
-				modelBlocks
-			);
+			this.processChunkEdges(chunk, size, height, context);
+			this.processFilteredBlocks(chunk, filter, context);
 		} else {
-			this.processAllBlocks(
-				chunk,
-				size,
-				height,
-				worldX,
-				worldZ,
-				mergeGroups,
-				renderedBlocks,
-				modelBlocks
-			);
+			this.processAllBlocks(chunk, size, height, context);
 		}
 
 		return {
-			meshGroups: this.createMeshGroups(mergeGroups),
-			modelBlocks,
-			renderedBlocks,
+			meshGroups: this.createMeshGroups(context.mergeGroups),
+			modelBlocks: context.modelBlocks,
+			renderedBlocks: context.renderedBlocks,
 		};
 	}
 
 	private static processFilteredBlocks(
 		chunk: Chunk,
 		filter: Set<string>,
-		worldX: number,
-		worldZ: number,
-		mergeGroups: Map<string, MeshData>,
-		renderedBlocks: Set<string>,
-		modelBlocks: Map<string, number>
+		context: MeshBuilderContext
 	) {
 		for (const key of filter) {
-			if (!renderedBlocks.has(key)) {
+			if (!context.renderedBlocks.has(key)) {
 				const [x, y, z] = key.split(",").map(Number);
-				this.processBlock(chunk, x, y, z, worldX, worldZ, mergeGroups, renderedBlocks, modelBlocks);
+				this.processBlock(chunk, [x, y, z], context);
 			}
 		}
 	}
@@ -154,28 +146,27 @@ export class ChunkMeshBuilder {
 		chunk: Chunk,
 		size: number,
 		height: number,
-		mergeGroups: Map<string, MeshData>,
-		renderedBlocks: Set<string>,
-		modelBlocks: Map<string, number>
+		context: MeshBuilderContext
 	) {
 		if (!chunk.edges.size) return;
+
 		for (const { edge, getCoords } of EdgeConfigs) {
 			if (!chunk.edges.has(edge)) continue;
 
 			for (let y = 0; y < height; y++) {
 				for (let i = 0; i < size; i++) {
+					// 跳过角落
+					const isLeftOrRightEdge = edge === 0 || edge === 1;
+					const isTopOrBottomEdge = edge === 2 || edge === 3;
+
+					// 左/右边跳过上下角
+					if (isLeftOrRightEdge && (i === 0 || i === size - 1)) continue;
+
+					// 上/下边跳过左右角
+					if (isTopOrBottomEdge && (i === 0 || i === size - 1)) continue;
+
 					const [x, yCoord, z] = getCoords(i, y);
-					this.processBlock(
-						chunk,
-						x,
-						yCoord,
-						z,
-						chunk.position.x * size,
-						chunk.position.z * size,
-						mergeGroups,
-						renderedBlocks,
-						modelBlocks
-					);
+					this.processBlock(chunk, [x, yCoord, z], context);
 				}
 			}
 		}
@@ -187,26 +178,12 @@ export class ChunkMeshBuilder {
 		chunk: Chunk,
 		size: number,
 		height: number,
-		worldX: number,
-		worldZ: number,
-		mergeGroups: Map<string, MeshData>,
-		renderedBlocks: Set<string>,
-		modelBlocks: Map<string, number>
+		context: MeshBuilderContext
 	) {
 		for (let z = 0; z < size; z++) {
 			for (let x = 0; x < size; x++) {
 				for (let y = 0; y < height; y++) {
-					this.processBlock(
-						chunk,
-						x,
-						y,
-						z,
-						worldX,
-						worldZ,
-						mergeGroups,
-						renderedBlocks,
-						modelBlocks
-					);
+					this.processBlock(chunk, [x, y, z], context);
 				}
 			}
 		}
@@ -214,121 +191,66 @@ export class ChunkMeshBuilder {
 
 	private static processBlock(
 		chunk: Chunk,
-		x: number,
-		y: number,
-		z: number,
-		worldX: number,
-		worldZ: number,
-		mergeGroups: Map<string, MeshData>,
-		renderedBlocks: Set<string>,
-		modelBlocks: Map<string, number>
+		[x, y, z]: [number, number, number],
+		context: MeshBuilderContext
 	) {
 		const key = `${x},${y},${z}`;
-		const blockId = chunk.getBlock(x, y, z);
-		if (blockId === 0) return;
+		const [blockValue, blockId, block, envValue] = this.getBlockAt(x, y, z, chunk);
+		if (!block?.render) return;
+		const [wx, wy, wz] = [context.worldX + x, y, context.worldZ + z];
+		let target = this.initData();
+		if (block.render.type !== "model") {
+			const matKey = block.render.material.matKey;
+			if (!context.mergeGroups.has(matKey)) {
+				context.mergeGroups.set(matKey, target);
+			} else {
+				target = context.mergeGroups.get(matKey)!;
+			}
+		}
 
-		const def = BlockRegistry.Instance.getById(blockId);
-		if (!def?.render) return;
-
-		const posX = worldX + x;
-		const posY = y;
-		const posZ = worldZ + z;
-
-		switch (def.render.type) {
+		switch (block.render.type) {
 			case "cube": {
-				this.processCubeBlock(
-					def.render as CubeRender,
-					posX,
-					posY,
-					posZ,
-					blockId,
-					mergeGroups,
-					renderedBlocks,
-					key
-				);
+				let render = block.render as CubeRender;
+				let hasFace = false;
+				for (let i = 0; i < 6; i++) {
+					const normal = FaceDirectionOffset[i];
+
+					const [_, neighborId, neighbor] = this.getBlockAt(
+						wx + normal[0],
+						wy + normal[1],
+						wz + normal[2]
+					);
+					let shouldRender = this.shouldRenderFace(blockId, neighborId, render, neighbor?.render);
+					if (shouldRender) {
+						this.addFace(target, [wx, wy, wz], blockValue, envValue, render, i);
+						hasFace = true;
+					}
+				}
+				if (hasFace) {
+					context.renderedBlocks.add(key);
+				}
 				break;
 			}
 			case "cross": {
-				this.processCrossBlock(
-					def.render as CrossRender,
-					posX,
-					posY,
-					posZ,
-					mergeGroups,
-					renderedBlocks,
-					key
-				);
+				let render = block.render as CrossRender;
+				this.addCross(target, [wx, wy, wz], blockValue, render, envValue);
+				context.renderedBlocks.add(key);
 				break;
 			}
 			case "model": {
-				modelBlocks.set(`${posX},${posY},${posZ}`, blockId);
-				renderedBlocks.add(key);
+				context.modelBlocks.set(`${wx},${wy},${wz}`, blockId);
+				context.renderedBlocks.add(key);
 				break;
 			}
 		}
 	}
 
-	private static processCubeBlock(
-		render: CubeRender,
-		posX: number,
-		posY: number,
-		posZ: number,
-		blockId: number,
-		mergeGroups: Map<string, MeshData>,
-		renderedBlocks: Set<string>,
-		key: string
-	) {
-		const matKey = render.material.matKey;
-		if (!mergeGroups.has(matKey)) {
-			mergeGroups.set(matKey, this.initData());
-		}
-		const target = mergeGroups.get(matKey)!;
-
-		let hasFace = false;
-		for (let i = 0; i < 6; i++) {
-			const normal = FaceDirectionOffset[i];
-			const nx = posX + normal[0];
-			const ny = posY + normal[1];
-			const nz = posZ + normal[2];
-			const neighborId = ChunkManager.getBlockAt(nx, ny, nz);
-			const neighbor = BlockRegistry.Instance.getById(neighborId);
-
-			let shouldRender = this.shouldRenderFace(blockId, neighborId, render, neighbor?.render);
-			if (shouldRender) {
-				let surfaceColor = i === 4 ? render.material.surfaceColor : undefined;
-				this.addFace(target, posX, posY, posZ, i, render.uvs[i], surfaceColor);
-				hasFace = true;
-			}
-		}
-		if (hasFace) {
-			renderedBlocks.add(key);
-		}
-	}
-
-	private static processCrossBlock(
-		render: CrossRender,
-		posX: number,
-		posY: number,
-		posZ: number,
-		mergeGroups: Map<string, MeshData>,
-		renderedBlocks: Set<string>,
-		key: string
-	) {
-		const matKey = render.material.matKey;
-		if (!mergeGroups.has(matKey)) {
-			mergeGroups.set(matKey, this.initData());
-		}
-		const target = mergeGroups.get(matKey)!;
-
-		this.addCross(
-			target,
-			posX,
-			posY,
-			posZ,
-			render.uvs[render.uvIndex],
-			render.material.surfaceColor
-		);
-		renderedBlocks.add(key);
+	private static getBlockAt(x: number, y: number, z: number, chunk?: Chunk) {
+		let blockValue = chunk ? chunk.getBlock(x, y, z) : ChunkManager.getBlockAt(x, y, z);
+		let envValue = chunk ? chunk.getEnvironment(x, z) : ChunkManager.Instance.getEnvironment(x, z);
+		let id = BlockDataProcessor.getId(blockValue);
+		let def = BlockRegistry.Instance.getById(id);
+		return [blockValue, id, def, envValue] as const;
 	}
 
 	private static createMeshGroups(mergeGroups: Map<string, MeshData>): Record<string, VertexData> {
@@ -386,15 +308,29 @@ export class ChunkMeshBuilder {
 
 	private static addFace(
 		data: MeshData,
-		x: number,
-		y: number,
-		z: number,
-		faceIndex: number,
-		uv: Vector4,
-		surfaceColor: Color4 = new Color4(1, 1, 1, 1)
+		[x, y, z]: [number, number, number],
+		blockValue: number,
+		envValue: number,
+		render: CubeRender,
+		index: number
 	) {
-		const vertices = FaceVertices[faceIndex];
-		const normal = FaceDirectionOffset[faceIndex];
+		const orientation = render.getRotation?.(blockValue, index) ?? 0;
+		const faceMap = {
+			0: [0, 1, 2, 3, 4, 5],
+			1: [4, 5, 2, 3, 0, 1],
+			2: [0, 1, 4, 5, 2, 3],
+		};
+
+		const mappedIndex = faceMap[orientation]?.[index] ?? index;
+		const uv = render.getUv?.(blockValue, mappedIndex) ?? render.uvs[mappedIndex];
+		const surfaceColor = mappedIndex === 4 ? render.material.surfaceColor : undefined;
+		let color =
+			render.getColor?.(blockValue, mappedIndex, envValue) ??
+			render.material.color ??
+			new Color3(1, 1, 1);
+
+		const vertices = FaceVertices[index];
+		const normal = FaceDirectionOffset[index];
 		const baseIndex = data.positions.length / 3;
 
 		for (const [vx, vy, vz] of vertices) {
@@ -402,7 +338,6 @@ export class ChunkMeshBuilder {
 			data.normals.push(...normal);
 		}
 
-		// 正确的索引顺序
 		data.indices.push(
 			baseIndex,
 			baseIndex + 2,
@@ -412,13 +347,28 @@ export class ChunkMeshBuilder {
 			baseIndex + 2
 		);
 
-		// 顺时针映射 uv
-		const uvOrder = [
+		let uvOrder = [
 			[0, 1],
 			[1, 1],
 			[1, 0],
 			[0, 0],
 		];
+
+		if (orientation === 1 && (index === 2 || index === 3)) {
+			uvOrder = [
+				[1, 1],
+				[1, 0],
+				[0, 0],
+				[0, 1],
+			];
+		} else if (orientation === 2 && (index === 4 || index === 5 || index === 0 || index === 1)) {
+			uvOrder = [
+				[0, 0],
+				[0, 1],
+				[1, 1],
+				[1, 0],
+			];
+		}
 
 		for (const [uRatio, vRatio] of uvOrder) {
 			const u = uv.x + (uv.z - uv.x) * uRatio;
@@ -426,19 +376,25 @@ export class ChunkMeshBuilder {
 			data.uvs.push(u, v);
 		}
 
+		if (surfaceColor && !render.getColor) color = surfaceColor;
 		for (let i = 0; i < 4; i++) {
-			data.colors.push(surfaceColor.r, surfaceColor.g, surfaceColor.b, surfaceColor.a);
+			data.colors.push(color.r, color.g, color.b, (<Color4>color).a ?? 1);
 		}
 	}
 
 	private static addCross(
 		data: MeshData,
-		x: number,
-		y: number,
-		z: number,
-		uv: Vector4,
-		surfaceColor: Color4 = new Color4(1, 1, 1, 1)
+		[x, y, z]: [number, number, number],
+		blockValue: number,
+		render: CrossRender,
+		envValue: number
 	) {
+		const uv = render.uvs[render.getStage?.(blockValue) || 0];
+		let color =
+			render.getColor?.(blockValue, 0, envValue) ??
+			render.material.surfaceColor ??
+			render.material.color ??
+			new Color3(1, 1, 1);
 		const baseIndex = data.positions.length / 3;
 
 		const positions = [
@@ -491,7 +447,7 @@ export class ChunkMeshBuilder {
 		}
 
 		for (let i = 0; i < 8; i++) {
-			data.colors.push(surfaceColor.r, surfaceColor.g, surfaceColor.b, surfaceColor.a);
+			data.colors.push(color.r, color.g, color.b, (<Color4>color).a ?? 1);
 		}
 	}
 

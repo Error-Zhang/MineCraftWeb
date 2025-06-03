@@ -37,7 +37,7 @@ export class Game {
 		this.registerBlocks();
 		voxel.onUpdate(() => {
 			PlayerInputSystem.Instance.update();
-		});
+		}, false);
 	}
 
 	private get playerStore() {
@@ -46,6 +46,10 @@ export class Game {
 
 	private get worldStore() {
 		return useWorldStore.getState();
+	}
+
+	private get blockStore() {
+		return useBlockStore.getState();
 	}
 
 	public async start() {
@@ -137,8 +141,8 @@ export class Game {
 	private flatWorldGenerator() {
 		const generator = (chunkX: number, chunkZ: number) => {
 			const chunkData: ChunkData = {
-				blocks: new Uint16Array(),
-				shafts: [],
+				blocks: new Uint16Array(65536),
+				shafts: new Uint8Array(256),
 				position: {
 					x: chunkX,
 					z: chunkZ,
@@ -146,7 +150,7 @@ export class Game {
 			};
 
 			// 生成基础地形
-			for (let y = 0; y < 128; y++) {
+			for (let y = 0; y < 256; y++) {
 				const id = y == 4 ? 4 : y < 4 ? 3 : 0;
 				for (let z = 0; z < 16; z++) {
 					for (let x = 0; x < 16; x++) {
@@ -193,11 +197,11 @@ export class Game {
 			return chunksData.map(
 				(chunkData: { cells: number[]; shafts: number[]; x: number; z: number }) =>
 					Chunk.fromJSON({
-						blocks: MathUtils.decompressRLE(
-							chunkData.cells,
-							useBlockStore.getState().extractBlockId
-						),
-						shafts: chunkData.shafts,
+						blocks: <Uint16Array>MathUtils.decompressRLE(chunkData.cells, value => {
+							const blockId = this.blockStore.extractBlockId(value);
+							return blockId;
+						}),
+						shafts: <Uint8Array>MathUtils.decompressRLE(chunkData.shafts),
 						position: {
 							x: chunkData.x,
 							z: chunkData.z,

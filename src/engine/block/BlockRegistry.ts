@@ -1,10 +1,13 @@
 import { BlockDefinition } from "../types/block.type";
-import { SingleClass } from "@engine/core/Singleton.ts";
+import { SingleClass } from "../core/Singleton.ts";
 import { TagID, TagManager } from "./TagManager";
+import { BlockDataProcessor } from "@engine/block/BlockDataProcessor.ts";
+
+type TMeta = Record<string, unknown>;
 
 export class BlockRegistry extends SingleClass {
 	public readonly tagManager: TagManager;
-	private blocks: BlockDefinition<any>[] = [];
+	private blocks: BlockDefinition<TMeta>[] = [];
 	private nameToIdMap = new Map<string, number>();
 	private nextId = 1;
 	private namespaceToIdMap = new Map<string, Set<number>>();
@@ -19,7 +22,7 @@ export class BlockRegistry extends SingleClass {
 		return this.getInstance();
 	}
 
-	public registerBlock(block: BlockDefinition<any>, namespace?: string) {
+	public registerBlock(block: BlockDefinition<TMeta>, namespace?: string) {
 		// 验证方块
 		this.validateBlock(block, namespace);
 
@@ -50,7 +53,7 @@ export class BlockRegistry extends SingleClass {
 		}
 	}
 
-	public registerBlocks(blocks: BlockDefinition<any>[], namespace?: string) {
+	public registerBlocks(blocks: BlockDefinition<TMeta>[], namespace?: string) {
 		// 先注册有 ID 的方块
 		const blocksWithId = blocks.filter(block => block.id !== undefined);
 		blocksWithId.forEach(block => this.registerBlock(block, namespace));
@@ -88,8 +91,8 @@ export class BlockRegistry extends SingleClass {
 			.filter(block => block !== undefined);
 	}
 
-	public getAllBlocks<T extends Record<string, any>>(): BlockDefinition<T>[] {
-		return this.blocks.filter(block => block !== undefined);
+	public getAllBlocks<T extends TMeta>() {
+		return this.blocks.filter(block => block !== undefined) as BlockDefinition<T>[];
 	}
 
 	public getNamespaces() {
@@ -109,7 +112,7 @@ export class BlockRegistry extends SingleClass {
 		return (tag.startsWith("#") ? tag : `#${this.DEFAULT_NAMESPACE}:${tag}`) as TagID;
 	}
 
-	private validateBlock(block: BlockDefinition<any>, namespace?: string) {
+	private validateBlock(block: BlockDefinition<TMeta>, namespace?: string) {
 		// 检查必需字段
 		if (!block.blockType) {
 			throw new Error("Block must have a name");
@@ -137,8 +140,10 @@ export class BlockRegistry extends SingleClass {
 			if (this.blocks[block.id] !== undefined) {
 				throw new Error(`Block with ID ${block.id} is already registered`);
 			}
-			if (block.id < 1 || block.id > 65535) {
-				throw new Error(`Block ${fullName} has invalid ID: ${block.id}`);
+			if (block.id < 1 || block.id > BlockDataProcessor.MAX_ID) {
+				throw new Error(
+					`Block ${fullName} has invalid ID: ${block.id},range must be in 1~${BlockDataProcessor.MAX_ID}`
+				);
 			}
 		}
 

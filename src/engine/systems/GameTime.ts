@@ -1,49 +1,74 @@
 export class GameTime {
-	private _realSecondsPerDay = 1800; // 现实 1800 秒为游戏 1 天
-	private _totalGameSeconds = 0; // 累积游戏秒数
+	/** 游戏中一天的时长（秒） */
+	public readonly GAME_SECONDS_PER_DAY = 86400;
+	public readonly GAME_SECONDS_PER_HOUR = 3600;
+	public readonly GAME_SECONDS_PER_MINUTE = 60;
 
-	/** 获取当前总游戏天数（从0开始） */
+	private _totalGameSeconds = this.GAME_SECONDS_PER_DAY / 2; // 从中午开始
+
+	constructor(private readonly realSecondsPerDay: number = 1800) {}
+
+	/** 当前是第几天 */
 	public get day(): number {
-		return Math.floor(this._totalGameSeconds / 86400);
+		return Math.floor(this._totalGameSeconds / this.GAME_SECONDS_PER_DAY);
 	}
 
-	/** 获取当前天内的时间（秒数 0 ~ 86399） */
+	/** 当前天内的时间（秒） */
 	public get timeOfDaySeconds(): number {
-		return this._totalGameSeconds % 86400;
+		return this._totalGameSeconds % this.GAME_SECONDS_PER_DAY;
 	}
 
-	/** 游戏内小时（0 ~ 23） */
+	/** 当前一天中的进度（0 ~ 1） */
+	public get dayProgress(): number {
+		return this.timeOfDaySeconds / this.GAME_SECONDS_PER_DAY;
+	}
+
+	public set dayProgress(value: number) {
+		this._totalGameSeconds = this.GAME_SECONDS_PER_DAY * value;
+	}
+
+	/** 太阳角度(-1 ~ 1) */
+	public get sunInclination(): number {
+		return this.dayProgress * 2 - 1;
+	}
+
+	/** 当前小时（0 ~ 23） */
 	public get hour(): number {
-		return Math.floor(this.timeOfDaySeconds / 3600);
+		return Math.floor(this.timeOfDaySeconds / this.GAME_SECONDS_PER_HOUR);
 	}
 
-	/** 游戏内分钟（0 ~ 59） */
+	/** 当前分钟（0 ~ 59） */
 	public get minute(): number {
-		return Math.floor((this.timeOfDaySeconds % 3600) / 60);
+		const remainingSeconds = this.timeOfDaySeconds % this.GAME_SECONDS_PER_HOUR;
+		return Math.floor(remainingSeconds / this.GAME_SECONDS_PER_MINUTE);
 	}
 
-	/** 是否为白天（示例：6:00 ~ 18:00） */
+	/** 是否是白天（默认 6:00 ~ 18:00） */
 	public get isDaytime(): boolean {
 		const h = this.hour;
 		return h >= 6 && h < 18;
 	}
 
-	/** 当前游戏内时间字符串，如 "Day 3, 14:05" */
+	/** 获取当前时间字符串 */
 	public get timeString(): string {
 		const h = String(this.hour).padStart(2, "0");
 		const m = String(this.minute).padStart(2, "0");
 		return `Day ${this.day}, ${h}:${m}`;
 	}
 
+	/** 更新游戏时间 */
 	public update(deltaTime: number) {
-		this._totalGameSeconds += deltaTime * (86400 / this._realSecondsPerDay); // 按比例推进
+		const gameSecondsPerRealSecond = this.GAME_SECONDS_PER_DAY / this.realSecondsPerDay;
+		this._totalGameSeconds += deltaTime * gameSecondsPerRealSecond;
 	}
 
-	public setTime(time: number) {
-		this._totalGameSeconds = time;
+	/** 设置当前游戏总时间 */
+	public setTime(totalGameSeconds: number) {
+		this._totalGameSeconds = totalGameSeconds;
 	}
 
+	/** 重置为中午（游戏时间 12:00） */
 	public reset() {
-		this._totalGameSeconds = 0;
+		this._totalGameSeconds = this.GAME_SECONDS_PER_DAY / 2;
 	}
 }

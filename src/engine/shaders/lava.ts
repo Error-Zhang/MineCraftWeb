@@ -37,28 +37,24 @@ export const lavaVertexShader = `
 export const lavaFragmentShader = `
     precision highp float;
 
-    varying vec2 vUV;
-    varying vec3 vNormal;
-    varying vec3 vPosition;
-
-    uniform sampler2D diffuseSampler;
-    uniform float time;
-    uniform float glowIntensity;
-
-    void main(void) {
-        // 基础颜色
-        vec4 color = texture2D(diffuseSampler, vUV);
-        
-        // 添加发光效果
-        float glow = sin(time * 2.0) * 0.5 + 0.5;
-        color.rgb += vec3(1.0, 0.3, 0.0) * glow * glowIntensity;
-        
-        // 添加边缘光效果
-        vec3 normal = normalize(vNormal);
-        float rim = 1.0 - max(0.0, dot(normal, vec3(0.0, 0.0, 1.0)));
-        rim = pow(rim, 2.0);
-        color.rgb += vec3(1.0, 0.3, 0.0) * rim * 0.5;
-        
-        gl_FragColor = color;
-    }
-`; 
+		varying vec2 vUV;
+		varying vec3 vNormal;
+		varying vec3 vPosition;
+		
+		uniform sampler2D diffuseSampler;
+		uniform float time;
+		uniform float glowIntensity;
+		
+		void main(void) {
+				// 基础颜色
+				vec4 color = texture2D(diffuseSampler, vUV);
+		
+				// 动态发光（全部面统一）
+				float glow = sin(time * 2.0) * 0.5 + 0.5;
+				vec3 lavaGlow = vec3(1.0, 0.3, 0.0) * glow * glowIntensity;
+				color.rgb += lavaGlow;
+		
+				// 输出最终颜色
+				gl_FragColor = color;
+		}
+`;

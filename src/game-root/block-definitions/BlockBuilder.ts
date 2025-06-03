@@ -1,4 +1,4 @@
-import { AbstractMesh, Vector3, Vector4 } from "@babylonjs/core";
+import { AbstractMesh, Color3, Vector3, Vector4 } from "@babylonjs/core";
 import BlockType from "./BlockType.ts";
 import {
 	BlockProperties,
@@ -13,47 +13,38 @@ import {
 import BlockMeshRegistry from "@engine/block/BlockMeshRegistry.ts";
 import { blocksUvTable } from "@/game-root/block-definitions/TextureAtlas.ts";
 import { BlockMaterialManager } from "@engine/renderer/BlockMaterialManager.ts";
+import { BlockDataProcessor } from "@engine/block/BlockDataProcessor.ts";
+import { TAGS, TAG_GETTERS } from "./BlockTags.ts";
 
-// 标签分类
-export const TAGS = {
-	NATURE: {
-		TERRAIN: "地形",
-		PLANT: "植物",
-		TREE: "树木",
-		FLOWER: "花卉",
-		DECORATION: "装饰",
-	},
-	FUNCTIONAL: {
-		CRAFTING: "制作",
-		INTERACTIVE: "交互",
-		LIQUID: "液体",
-	},
-} as const;
+type CubeGetters = Pick<CubeRender, "getUv" | "getColor" | "getRotation">;
+type CrossGetters = Pick<CrossRender, "getStage" | "getColor">;
 
 // 工具函数
 function createCubeRender(
 	uvs: Vector4[],
 	transparencyType: CubeRender["transparencyType"],
-	material: RenderMaterial
+	material: RenderMaterial,
+	getters?: CubeGetters
 ): CubeRender {
 	return {
 		type: "cube",
 		uvs,
 		transparencyType,
 		material,
+		...getters,
 	};
 }
 
 function createCrossRender(
 	uvs: Vector4[],
-	uvIndex: number = 0,
-	material: RenderMaterial
+	material: RenderMaterial,
+	getters?: CrossGetters
 ): CrossRender {
 	return {
 		type: "cross",
 		uvs,
-		uvIndex,
 		material,
+		...getters,
 	};
 }
 
@@ -99,10 +90,12 @@ export class BlockBuilder {
 		options: {
 			properties?: Partial<BlockProperties>;
 			materialOptions?: RenderMaterial;
-			meshOptions?: MeshProperties;
 		};
+		processor?: BlockDataProcessor;
 		tags: string[];
 		render: RenderComponent;
+		cubeGetters?: Pick<CubeRender, "getUv" | "getColor" | "getRotation">;
+		crossGetters?: Pick<CrossRender, "getStage" | "getColor">;
 	};
 
 	constructor(type: BlockType, displayName: string, id?: number) {
@@ -125,6 +118,25 @@ export class BlockBuilder {
 
 	withTags(...tags: string[]) {
 		this.block.tags = [...new Set([...this.block.tags, ...tags])];
+
+		// 应用标签对应的 getter
+		for (const tag of tags) {
+			const getters = TAG_GETTERS[tag];
+			if (getters) {
+				if (getters.cube) {
+					this.block.cubeGetters = {
+						...this.block.cubeGetters,
+						...getters.cube,
+					};
+				}
+				if (getters.cross) {
+					this.block.crossGetters = {
+						...this.block.crossGetters,
+						...getters.cross,
+					};
+				}
+			}
+		}
 		return this;
 	}
 
@@ -134,12 +146,19 @@ export class BlockBuilder {
 	}
 
 	withMeshOptions(meshOptions: MeshProperties) {
-		this.block.options.meshOptions = meshOptions;
-		if (this.block.options.materialOptions) {
-			this.block.options.materialOptions.meshProperties = meshOptions;
+		let materialOptions = this.block.options.materialOptions;
+		if (materialOptions) {
+			materialOptions.meshProperties = meshOptions;
+		} else {
+			this.block.options.materialOptions = {
+				matKey: "",
+				meshProperties: meshOptions,
+			};
 		}
 		return this;
 	}
+
+	withColor() {}
 
 	withMaterialOptions(materialOptions: Partial<RenderMaterial>, presetMatKey?: string) {
 		if (presetMatKey) {
@@ -152,9 +171,19 @@ export class BlockBuilder {
 			BlockMaterialManager.registerCustomMaterial(materialOptions.matKey, materialOptions);
 		}
 		this.block.options.materialOptions = {
-			matKey: materialOptions.matKey || presetMatKey || "",
 			...materialOptions,
+			matKey: materialOptions.matKey || presetMatKey || "",
 		};
+		return this;
+	}
+
+	withCubeGetters(getters: CubeGetters) {
+		this.block.cubeGetters = getters;
+		return this;
+	}
+
+	withCrossGetters(getters: CrossGetters) {
+		this.block.crossGetters = getters;
 		return this;
 	}
 
@@ -168,22 +197,25 @@ export class BlockBuilder {
 			{
 				...this.block.options.materialOptions,
 				matKey: this.block.options.materialOptions?.matKey || materialKey,
-			}
+			},
+			this.block.cubeGetters
 		);
 		return this;
 	}
 
-	asCross(stage: number = 0) {
+	asCross() {
 		if (!blocksUvTable[this.block.blockType].stageUvs) {
 			throw new Error("stageUvs missing");
-		} else if (stage >= blocksUvTable[this.block.blockType].stageUvs!.length) {
-			throw new Error("stage overflow");
 		}
-		this.block.render = createCrossRender(blocksUvTable[this.block.blockType].stageUvs!, stage, {
-			...this.block.options.materialOptions,
-			matKey:
-				this.block.options.materialOptions?.matKey || BlockMaterialManager.PRESET_MATERIALS.CROSS,
-		});
+		this.block.render = createCrossRender(
+			blocksUvTable[this.block.blockType].stageUvs!,
+			{
+				...this.block.options.materialOptions,
+				matKey:
+					this.block.options.materialOptions?.matKey || BlockMaterialManager.PRESET_MATERIALS.CROSS,
+			},
+			this.block.crossGetters
+		);
 		return this;
 	}
 

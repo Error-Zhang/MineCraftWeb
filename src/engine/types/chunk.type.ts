@@ -1,7 +1,7 @@
 export interface ChunkData {
 	blocks: Uint16Array;
 	position: { x: number; z: number };
-	shafts: number[];
+	shafts: Uint8Array;
 }
 
 export type Coords = {

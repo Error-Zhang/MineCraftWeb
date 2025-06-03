@@ -5,7 +5,10 @@ const EPSILON = 1e-6;
 class MathUtils {
 	static generateGUID = v4;
 
-	static decompressRLE(compressed: number[], decode?: (value: number) => number): Uint16Array {
+	static decompressRLE(
+		compressed: number[],
+		decode?: (value: number) => number
+	): Uint16Array | Uint8Array {
 		if (!compressed || compressed.length === 0) {
 			throw new Error("Compressed value must be greater than 0");
 		}
@@ -16,7 +19,7 @@ class MathUtils {
 			length += compressed[i];
 		}
 
-		const result = new Uint16Array(length);
+		const result = length > 256 ? new Uint16Array(length) : new Uint8Array(length);
 		let pos = 0;
 
 		for (let i = 0; i < compressed.length; i += 2) {

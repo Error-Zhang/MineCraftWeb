@@ -6,6 +6,7 @@ import { BlockMaterialManager } from "../renderer/BlockMaterialManager.ts";
 import { ModelRender } from "../types/block.type.ts";
 import { Position } from "../types/chunk.type.ts";
 import { ChunkManager } from "../chunk/ChunkManager.ts";
+import { Environment } from "../environment/Environment.ts";
 
 export class ChunkRenderer {
 	private root: TransformNode;
@@ -44,12 +45,10 @@ export class ChunkRenderer {
 		// 创建网格
 		for (const [matKey, vertexData] of Object.entries(meshGroups)) {
 			const material = BlockMaterialManager.getMaterialByKey(this.scene, matKey);
-			this.createMesh(matKey, vertexData, material);
+			const mesh = this.createMesh(matKey, vertexData, material);
 		}
 
-		if (!filter) {
-			this.buildModelBlocks(modelBlocks);
-		}
+		this.buildModelBlocks(modelBlocks);
 	}
 
 	// bugfix:如果你在某天发现本应该被销毁的网格回到了世界原点，那一定是dispose出了问题
@@ -58,6 +57,9 @@ export class ChunkRenderer {
 			modelInstance.dispose();
 		});
 		this.modelInstances.clear();
+		this.root.getChildren().forEach(child => {
+			Environment.Instance.shadowGenerator?.removeShadowCaster(child as Mesh);
+		});
 		this.root.dispose();
 	}
 
@@ -74,6 +76,10 @@ export class ChunkRenderer {
 		const render = <ModelRender>def.render;
 		const model = await render.loadModel(this.scene, new Vector3(x, y, z));
 		model.metadata = { blockId };
+		model.getChildMeshes().forEach(child => {
+			child.renderingGroupId = 1;
+			Environment.Instance.shadowGenerator?.addShadowCaster(child);
+		});
 		this.modelInstances.set(posKey, model);
 	}
 
@@ -88,21 +94,17 @@ export class ChunkRenderer {
 		mesh.material = material;
 
 		// 获取材质中的网格属性配置
-		const meshProperties = (material as any).metadata?.meshProperties;
+		const meshProperties = (material as any).metadata?.meshProperties ?? {};
 
 		// 设置默认值
-		mesh.isPickable = true;
-		mesh.checkCollisions = true;
-		mesh.isVisible = true;
+		mesh.isPickable = meshProperties.isPickable ?? true;
+		mesh.checkCollisions = meshProperties.checkCollisions ?? true;
+		mesh.receiveShadows = meshProperties.receiveShadows ?? true;
+		mesh.alphaIndex = meshProperties.alphaIndex ?? 0;
 
-		// 应用材质中配置的网格属性
-		if (meshProperties) {
-			if (meshProperties.isPickable !== undefined) mesh.isPickable = meshProperties.isPickable;
-			if (meshProperties.checkCollisions !== undefined)
-				mesh.checkCollisions = meshProperties.checkCollisions;
-			if (meshProperties.isVisible !== undefined) mesh.isVisible = meshProperties.isVisible;
-		}
-
+		// 分租渲染确保在环境渲染之后，否则会被影响
+		mesh.renderingGroupId = 1;
+		Environment.Instance.shadowGenerator?.addShadowCaster(mesh);
 		mesh.setParent(this.root);
 		return mesh;
 	}

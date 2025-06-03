@@ -8,7 +8,7 @@ export class Chunk {
 	public blocks!: Uint16Array;
 	public edges: Set<number> = new Set();
 	public blockEntities: Record<string, BlockEntity> = {};
-	public shafts: ChunkData["shafts"] = [];
+	public shafts!: ChunkData["shafts"];
 	public isVisible: boolean = true;
 
 	constructor() {}
@@ -19,19 +19,19 @@ export class Chunk {
 
 	public static fromJSON(data: ChunkData): Chunk {
 		const chunk = new Chunk();
-		chunk.setData(data);
+		chunk.position = data.position;
+		chunk.blocks = data.blocks;
+		chunk.shafts = data.shafts;
 		return chunk;
-	}
-
-	public setData(data: ChunkData) {
-		this.position = data.position;
-		this.blocks = data.blocks;
-		this.shafts = data.shafts;
 	}
 
 	public getBlock(x: number, y: number, z: number): number {
 		if (!this.isInBounds(x, y, z)) return -1;
 		return this.blocks[this.index(x, y, z)] ?? 0;
+	}
+
+	public getEnvironment(x: number, z: number): number {
+		return this.shafts[x + z * ChunkManager.ChunkSize] || -1;
 	}
 
 	public setBlock(x: number, y: number, z: number, blockId: number) {

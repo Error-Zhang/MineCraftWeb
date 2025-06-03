@@ -1,7 +1,7 @@
 import { ChunkManager } from "../chunk/ChunkManager.ts";
 import { BlockRegistry } from "../block/BlockRegistry.ts";
 import { Position } from "../types/chunk.type.ts";
-import Sky from "@engine/environment/Sky.ts";
+import { Environment } from "@engine/environment/Environment.ts";
 import { Chunk } from "@engine/chunk/Chunk.ts";
 
 export class WorldController {
@@ -10,7 +10,7 @@ export class WorldController {
 
 	constructor(
 		public chunkManager: ChunkManager,
-		public sky: Sky
+		public sky: Environment
 	) {}
 
 	/**
@@ -21,7 +21,7 @@ export class WorldController {
 		const shouldUpdateSky =
 			!this.lastSkyPos ||
 			Math.max(Math.abs(x - this.lastSkyPos.x), Math.abs(z - this.lastSkyPos.z)) >
-				Sky.MinUpdateDistance;
+				this.sky.MinUpdateDistance;
 
 		if (shouldUpdateSky) {
 			this.sky.updatePosition(x, z);

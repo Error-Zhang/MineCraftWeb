@@ -48,9 +48,9 @@ class GameWindow {
 		}
 	}
 
-	public addEventListener(type: string, handler: GameEventHandler) {
+	public addEventListener(type: string, handler: GameEventHandler, isBlock = true) {
 		const wrapped: EventListener = (event: Event) => {
-			if (this.active) {
+			if (this.active || !isBlock) {
 				handler(event);
 			}
 		};

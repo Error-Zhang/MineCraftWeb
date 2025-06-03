@@ -1,4 +1,14 @@
-import { Color3, Material, PBRMaterial, Scene, ShaderMaterial, StandardMaterial, Texture } from "@babylonjs/core";
+import {
+	Color3,
+	Color4,
+	Material,
+	PBRMaterial,
+	Scene,
+	ShaderMaterial,
+	StandardMaterial,
+	Texture,
+} from "@babylonjs/core";
+import { Color } from "../types/block.type.ts";
 
 /** 材质文档
  * https://doc.babylonjs.com/features/featuresDeepDive/materials/using/pbrMaterials
@@ -27,7 +37,7 @@ interface MaterialCreationConfig {
 	/** 纹理键，用于从纹理缓存中获取对应的纹理 */
 	textureKey?: string;
 	/** 基础颜色，影响材质的整体色调 */
-	color: Color3;
+	color: Color;
 	/** 自发光颜色，使材质在暗处也能发光 */
 	emissive: Color3;
 	/** 金属度，影响材质的金属感，0-1之间，值越大金属感越强 */
@@ -49,8 +59,9 @@ interface MaterialCreationConfig {
 }
 
 export interface MaterialConfig {
+	materialType?: "standard" | "pbr";
 	textureKey?: string;
-	color?: Color3;
+	color?: Color3 | Color4;
 	emissive?: Color3;
 	metallic?: number;
 	roughness?: number;
@@ -65,7 +76,8 @@ export interface MaterialConfig {
 	meshProperties?: {
 		isPickable?: boolean;
 		checkCollisions?: boolean;
-		isVisible?: boolean;
+		receiveShadows?: boolean;
+		alphaIndex?: number; // 控制渲染顺序
 	};
 	shadowProperties?: any;
 }
@@ -116,6 +128,7 @@ export class BlockMaterialManager {
 	static initializePresetMaterials() {
 		// 固体方块材质
 		this.registerMaterialPreset(this.PRESET_MATERIALS.SOLID, {
+			materialType: "pbr",
 			alpha: 1,
 			backFaceCulling: true,
 			roughness: 0.8,
@@ -162,6 +175,7 @@ export class BlockMaterialManager {
 				})(),
 			},
 			meshProperties: {
+				alphaIndex: 1,
 				isPickable: false,
 				checkCollisions: false,
 			},
@@ -189,6 +203,7 @@ export class BlockMaterialManager {
 				})(),
 			},
 			meshProperties: {
+				alphaIndex: 2,
 				isPickable: false,
 				checkCollisions: false,
 			},
@@ -196,7 +211,6 @@ export class BlockMaterialManager {
 
 		// 树叶材质
 		this.registerMaterialPreset(this.PRESET_MATERIALS.LEAVES, {
-			color: Color3.Green(),
 			alphaCutOff: 0.5,
 			backFaceCulling: false,
 			roughness: 0.8,
@@ -240,6 +254,7 @@ export class BlockMaterialManager {
 
 	static createMaterial(scene: Scene, config: MaterialConfig): Material {
 		const {
+			materialType = "standard",
 			color = new Color3(1, 1, 1),
 			emissive = new Color3(0, 0, 0),
 			metallic = 0,
@@ -249,32 +264,37 @@ export class BlockMaterialManager {
 			backFaceCulling = true,
 			shader,
 			alphaCutOff = 0,
-			specular = new Color3(1, 1, 1),
+			specular = new Color3(0, 0, 0),
 			environmentIntensity = 1,
 			usePhysicalLightFalloff = false,
+			meshProperties,
 		} = config;
 
-		if (shader) {
-			return this.createShaderMaterial(scene, {
-				textureKey,
-				backFaceCulling,
-				shader,
-			});
-		}
+		const createMaterial =
+			materialType === "standard" ? this.createStandardMaterial : this.createPBRMaterial;
 
-		return this.createPBRMaterial(scene, {
-			textureKey,
-			color,
-			emissive,
-			metallic,
-			roughness,
-			alpha,
-			alphaCutOff,
-			backFaceCulling,
-			specular,
-			environmentIntensity,
-			usePhysicalLightFalloff,
-		});
+		const mat: Material = shader
+			? this.createShaderMaterial(scene, {
+					textureKey,
+					backFaceCulling,
+					shader,
+				})
+			: createMaterial(scene, {
+					textureKey,
+					color,
+					emissive,
+					metallic,
+					roughness,
+					alpha,
+					alphaCutOff,
+					backFaceCulling,
+					specular,
+					environmentIntensity,
+					usePhysicalLightFalloff,
+				});
+		mat.metadata = { meshProperties };
+
+		return mat;
 	}
 
 	// 获取材质（带缓存）
@@ -343,6 +363,7 @@ export class BlockMaterialManager {
 		// 设置基础属性
 		shaderMaterial.backFaceCulling = config.backFaceCulling;
 		shaderMaterial.needAlphaBlending = () => true;
+		shaderMaterial.disableDepthWrite = false;
 
 		// 设置纹理
 		if (config.textureKey) {
@@ -400,7 +421,6 @@ export class BlockMaterialManager {
 		standardMaterial.alpha = config.alpha;
 		standardMaterial.alphaCutOff = config.alphaCutOff;
 		standardMaterial.separateCullingPass = true;
-		standardMaterial.diffuseColor = config.color;
 		standardMaterial.emissiveColor = config.emissive;
 		standardMaterial.specularColor = config.specular;
 		standardMaterial.roughness = config.roughness;
@@ -417,7 +437,6 @@ export class BlockMaterialManager {
 		pbrMaterial.albedoTexture = texture;
 		pbrMaterial.alpha = config.alpha;
 		pbrMaterial.alphaCutOff = config.alphaCutOff;
-		pbrMaterial.albedoColor = config.color;
 		pbrMaterial.emissiveColor = config.emissive;
 		pbrMaterial.roughness = config.roughness;
 		pbrMaterial.metallic = config.metallic;
