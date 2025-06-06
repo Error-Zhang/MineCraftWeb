@@ -1,43 +1,25 @@
-import React, { useContext, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Slot, { createEmptySlots, DroppedSlotType, SlotType } from "../../components/slot";
 import InventoryGrid from "@/ui-root/components/inventory-grid";
 import { matchesPattern } from "@/ui-root/views/craft-table/match.ts";
 import { useInventorySlots } from "@/ui-root/components/inventory-grid/useInventorySlots.tsx";
 import "./index.less";
+import BlockType from "@/game-root/block-definitions/BlockType.ts";
+import { BlockRecipe } from "@/game-root/block-definitions/BlockRecipes.ts";
+import { useBlockStore } from "@/store";
 
 interface CraftingPanelProps {
 	title?: string;
 	guid: string;
 	rows: number;
 	columns: number;
-	recipes: Record<Blocks, BlockRecipe[]>;
+	recipes: Record<BlockType, BlockRecipe[]>;
 }
 
 const CraftingPanel: React.FC<CraftingPanelProps> = ({ title, guid, rows, columns, recipes }) => {
-	const { blockIconMap } = useContext(GameContext);
 	const [gridSlots, setGridSlots] = useState<SlotType[]>(createEmptySlots(rows * columns));
 	const [resultSlot, setResultSlot] = useState<SlotType[]>(createEmptySlots(1));
 	const dropFinish = useRef(false);
-
-	// 加载数据
-	useEffect(() => {
-		const result = gameStore.getInteractBlocksStore(guid);
-		if (result) {
-			const { gridSlots, resultSlot } = result;
-			setGridSlots(gridSlots);
-			setResultSlot(resultSlot);
-		} else {
-			setGridSlots(createEmptySlots(rows * columns));
-			setResultSlot(createEmptySlots(1));
-		}
-	}, [guid]);
-
-	// 保存数据
-	useEffect(() => {
-		return () => {
-			gameStore.setInteractBlocksStore(guid, { gridSlots, resultSlot });
-		};
-	}, [guid, gridSlots, resultSlot]); // 添加所有变化的状态作为依赖
 
 	function reshape<T>(array: T[]): T[][] {
 		const result: T[][] = [];
@@ -51,7 +33,7 @@ const CraftingPanel: React.FC<CraftingPanelProps> = ({ title, guid, rows, column
 		const result = Object.entries(recipes)
 			.flatMap(([block, recipeList]) => {
 				return recipeList.map(recipe => ({
-					block: block as Blocks,
+					block: block,
 					recipe,
 				}));
 			})
@@ -61,11 +43,13 @@ const CraftingPanel: React.FC<CraftingPanelProps> = ({ title, guid, rows, column
 
 		if (result) {
 			const output = result.recipe.output;
+			const def = useBlockStore.getState().blockRegistry?.getByName(BlockType[output.item])!;
 			setResultSlot([
 				{
+					id: def.id || 0,
 					key: output.item,
+					displayName: def.metaData.displayName as string,
 					value: output.count,
-					icon: blockIconMap[output.item],
 					source: "CraftTableResult",
 				},
 			]);

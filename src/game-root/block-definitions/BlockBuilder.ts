@@ -93,10 +93,10 @@ export class BlockBuilder {
 		crossGetters?: Pick<CrossRender, "getStage" | "getColor">;
 	};
 
-	constructor(type: BlockType, displayName: string, id?: number) {
+	constructor(blockType: BlockType, displayName: string, id?: number) {
 		this.block = {
 			id,
-			blockType: type,
+			blockType,
 			metaData: { displayName, maxStackCount: 40 },
 			options: {},
 			tags: [],
@@ -224,6 +224,9 @@ export class BlockBuilder {
 	}
 
 	build() {
-		return this.block;
+		return {
+			...this.block,
+			blockType: BlockType[this.block.blockType],
+		};
 	}
 }
