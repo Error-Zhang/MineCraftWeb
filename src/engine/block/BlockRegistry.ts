@@ -1,7 +1,6 @@
 import { BlockDefinition } from "../types/block.type";
 import { SingleClass } from "../core/Singleton.ts";
 import { TagID, TagManager } from "./TagManager";
-import { BlockDataProcessor } from "@engine/block/BlockDataProcessor.ts";
 
 type TMeta = Record<string, unknown>;
 
@@ -13,7 +12,7 @@ export class BlockRegistry extends SingleClass {
 	private namespaceToIdMap = new Map<string, Set<number>>();
 	private readonly DEFAULT_NAMESPACE = "minecraft";
 
-	constructor() {
+	constructor(public decodeId?: (value: number) => number) {
 		super();
 		this.tagManager = new TagManager();
 	}
@@ -140,10 +139,8 @@ export class BlockRegistry extends SingleClass {
 			if (this.blocks[block.id] !== undefined) {
 				throw new Error(`Block with ID ${block.id} is already registered`);
 			}
-			if (block.id < 1 || block.id > BlockDataProcessor.MAX_ID) {
-				throw new Error(
-					`Block ${fullName} has invalid ID: ${block.id},range must be in 1~${BlockDataProcessor.MAX_ID}`
-				);
+			if (block.id < 1) {
+				throw new Error(`Block ${fullName} has invalid ID: ${block.id}`);
 			}
 		}
 

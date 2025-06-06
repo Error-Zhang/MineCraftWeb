@@ -1,5 +1,6 @@
-import { FreeCamera, Mesh, Scene, Vector3 } from "@babylonjs/core";
+import { FreeCamera, Ray, Scene, Vector3 } from "@babylonjs/core";
 import { PlayerInputSystem } from "@/game-root/player/PlayerInputSystem.ts";
+import { ParabolaMotion } from "@/game-root/utils/ParabolaMotion.ts";
 import { playerEvents } from "@/game-root/core/events.ts";
 
 // 基础相机类
@@ -9,6 +10,13 @@ export abstract class BasePlayerCamera {
 	protected readonly inputSystem: PlayerInputSystem;
 	protected moveValue = { x: 0, y: 0, z: 0 };
 
+	protected moveSpeed: number = 0.05;
+	private cameraState = {
+		lastPosition: new Vector3(),
+		lastYaw: 0,
+		lastPitch: 0,
+	};
+
 	constructor(scene: Scene, canvas: HTMLCanvasElement) {
 		this.scene = scene;
 		this.camera = new FreeCamera("Camera", new Vector3(0, 0, 0), this.scene);
@@ -16,24 +24,69 @@ export abstract class BasePlayerCamera {
 		this.camera.attachControl(canvas, true);
 		this.inputSystem = PlayerInputSystem.Instance;
 
+		scene.gravity = new Vector3(0, -9.81 / 60, 0);
+		scene.collisionsEnabled = true;
+
+		this.camera.ellipsoid = new Vector3(0.4, 0.9, 0.2); // 碰撞半径
+		this.camera.ellipsoidOffset = new Vector3(0, 0, 0); // 默认在顶部，向下偏移
+
 		this.initCamera();
 		this.bindInput();
-
-		this.scene.onBeforeRenderObservable.add(() => {
-			this.update();
-		});
 	}
 
-	public setChild(child: Mesh) {
-		child.setParent(this.camera);
+	public get root() {
+		return this.camera;
 	}
 
-	public setPosition(position: Vector3): void {
-		this.camera.position = position;
-		this.camera.setTarget(new Vector3(0, position.y, 0));
+	public get position(): Vector3 {
+		return this.camera.position;
 	}
 
-	// 射线拾取选中的方块信息，排除玩家自身碰撞体
+	public dispose() {
+		this.camera.detachControl();
+		this.camera.dispose();
+	}
+
+	public getYawPitch() {
+		const yaw = this.camera.rotation.y;
+		const pitch = this.camera.rotation.x;
+
+		return [yaw, pitch] as const;
+	}
+
+	public detectCameraChanges() {
+		const currentPosition = this.camera.position;
+		const [yaw, pitch] = this.getYawPitch();
+		let value = 0.01;
+		const moved = !currentPosition.equalsWithEpsilon(this.cameraState.lastPosition, value);
+		const turned =
+			Math.abs(yaw - this.cameraState.lastYaw) > value ||
+			Math.abs(pitch - this.cameraState.lastPitch) > value;
+
+		if (moved) this.cameraState.lastPosition.copyFrom(currentPosition);
+		if (turned) {
+			this.cameraState.lastYaw = yaw;
+			this.cameraState.lastPitch = pitch;
+		}
+
+		if (moved || turned) {
+			playerEvents.emit(
+				"playerMoved",
+				{ x: currentPosition.x, y: currentPosition.y, z: currentPosition.z },
+				{
+					yaw,
+					pitch,
+				}
+			);
+		}
+	}
+
+	public setPosition(x: number, y: number, z: number): void {
+		this.camera.position.set(x, y, z);
+		this.camera.setTarget(new Vector3(0, y, 0));
+	}
+
+	// 射线拾取选中的方块信息
 	public getPickInfo(maxPlaceDistance: number) {
 		const ray = this.camera!.getForwardRay();
 		const pick = this.scene.pickWithRay(ray, mesh => {
@@ -47,6 +100,15 @@ export abstract class BasePlayerCamera {
 		return null;
 	}
 
+	public update(dt: number): void {
+		this.camera.cameraDirection.addInPlace(
+			new Vector3(this.moveValue.x, this.moveValue.y, this.moveValue.z)
+		);
+		// 重置移动值
+		this.moveValue = { x: 0, y: 0, z: 0 };
+		this.detectCameraChanges();
+	}
+
 	protected initCamera(): void {
 		this.camera.inertia = 0.6;
 		this.camera.speed = 0.6;
@@ -58,19 +120,6 @@ export abstract class BasePlayerCamera {
 		this.inputSystem.onActionUpdate("moveBackward", () => this.moveBack());
 		this.inputSystem.onActionUpdate("moveLeft", () => this.moveLeft());
 		this.inputSystem.onActionUpdate("moveRight", () => this.moveRight());
-	}
-
-	protected update(): void {
-		if (this.isMove()) {
-			// 应用移动
-			this.camera.position.addInPlace(
-				new Vector3(this.moveValue.x, this.moveValue.y, this.moveValue.z)
-			);
-			// 重置移动值
-			this.moveValue = { x: 0, y: 0, z: 0 };
-
-			playerEvents.emit("move", this.camera.position);
-		}
 	}
 
 	protected abstract getMoveSpeed(): number;
@@ -92,7 +141,7 @@ export abstract class BasePlayerCamera {
 	}
 
 	protected moveByDirection(direction: Vector3): void {
-		const speedMultiplier = this.inputSystem.isActionActive("sprint") ? 2 : 1;
+		const speedMultiplier = this.inputSystem.isActionActive("sprint") ? 1.25 : 1;
 		const move = this.getMoveSpeed() * speedMultiplier;
 		// 只保留水平方向的移动，忽略垂直分量
 		direction.y = 0;
@@ -100,19 +149,43 @@ export abstract class BasePlayerCamera {
 		this.moveValue.x += dir.x;
 		this.moveValue.z += dir.z;
 	}
-
-	private isMove(): boolean {
-		const value = this.moveValue;
-		return Math.abs(value.x) > 0.1 || Math.abs(value.y) > 0.1 || Math.abs(value.z) > 0.1;
-	}
 }
 
 // 生存模式相机
 export class SurvivalCamera extends BasePlayerCamera {
-	private readonly jumpForce = 0.3;
-	private isGrounded = true;
-	private verticalVelocity = 0;
-	private readonly gravity = 0.02;
+	public isGrounded = true;
+	private isJumping = false;
+	private velocityY = 0;
+	private motion: ParabolaMotion;
+	private speed: number = 1;
+
+	constructor(scene: Scene, canvas: HTMLCanvasElement) {
+		super(scene, canvas);
+		this.motion = new ParabolaMotion(0.7, "up", 1);
+	}
+
+	public override update(dt: number): void {
+		this.checkGrounded();
+		// 判断是否着地
+		if (this.isJumping) {
+			this.speed = 0.5;
+			this.velocityY = this.motion.update(dt);
+
+			if (this.velocityY <= 0 && this.isGrounded) {
+				this.velocityY = 0;
+				this.motion.reset();
+				this.isJumping = false;
+				this.speed = 1;
+			}
+			this.camera.cameraDirection.y = this.velocityY;
+		}
+
+		if (!this.isGrounded && !this.isJumping) {
+			this.camera.cameraDirection.y = -0.02;
+		}
+
+		super.update(dt);
+	}
 
 	protected initCamera(): void {
 		super.initCamera();
@@ -126,31 +199,23 @@ export class SurvivalCamera extends BasePlayerCamera {
 		// 跳跃
 		this.inputSystem.onActionStart("jump", () => {
 			if (this.isGrounded) {
-				this.verticalVelocity = this.jumpForce;
+				this.isJumping = true;
 				this.isGrounded = false;
 			}
 		});
 	}
 
-	protected update(): void {
-		// 应用重力
-		if (!this.isGrounded) {
-			this.verticalVelocity -= this.gravity;
-			this.moveValue.y += this.verticalVelocity;
-
-			// 检查是否着地
-			if (this.camera.position.y <= 0) {
-				this.camera.position.y = 0;
-				this.verticalVelocity = 0;
-				this.isGrounded = true;
-			}
-		}
-
-		super.update();
+	protected getMoveSpeed(): number {
+		return this.moveSpeed * this.speed; // 生存模式移动速度
 	}
 
-	protected getMoveSpeed(): number {
-		return 0.1; // 生存模式移动速度
+	private checkGrounded() {
+		// 从碰撞体底部发射一条短射线向下
+		const origin = this.camera.position;
+		const ray = new Ray(origin, Vector3.Down(), 2);
+		const pick = this.scene.pickWithRay(ray, mesh => mesh.isPickable && mesh.checkCollisions);
+		this.isGrounded = !!(pick?.hit && pick.distance <= 2);
+		return this.isGrounded;
 	}
 }
 
@@ -176,6 +241,6 @@ export class CreativeCamera extends BasePlayerCamera {
 	}
 
 	protected getMoveSpeed(): number {
-		return 0.3; // 创造模式移动速度更快
+		return 0.1; // 创造模式移动速度更快
 	}
 }

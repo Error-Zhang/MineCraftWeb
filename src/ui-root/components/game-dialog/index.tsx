@@ -22,15 +22,10 @@ const GameDialog: React.FC<ConfirmDialogProps> = ({
 		onCancel?.();
 	};
 
-	const handleDialogClick = (e: React.MouseEvent) => {
-		e.stopPropagation();
-		onConfirm?.();
-	};
-
 	return (
 		show && (
 			<div className="confirm-backdrop" onClick={handleBackdropClick}>
-				<div className="confirm-dialog" onClick={handleDialogClick}>
+				<div className="confirm-dialog">
 					<h2>{title}</h2>
 					<p>{message}</p>
 					<div className="confirm-actions">

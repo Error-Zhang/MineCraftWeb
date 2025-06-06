@@ -10,6 +10,9 @@ export default defineConfig({
 		},
 	},
 	assetsInclude: ["**/*.gltf", "**/*.glb"],
+	build: {
+		sourcemap: false, // 防止打包后的代码被还原
+	},
 	server: {
 		port: 4110,
 		/*proxy: {

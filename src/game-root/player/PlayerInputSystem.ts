@@ -60,7 +60,7 @@ const DEFAULT_ACTION_MAP: ActionMap = {
 	},
 	// 冲刺
 	sprint: {
-		keys: ["ControlLeft"],
+		keys: ["ShiftLeft"],
 		comboKeys: ["KeyW"], // 需要同时按W
 		pressType: "hold",
 	},

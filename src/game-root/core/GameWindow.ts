@@ -1,22 +1,26 @@
 type GameEventHandler = (...args: any) => void;
 
+type ActiveChangeHandler = (active: boolean, reason?: string) => void;
+
 class GameWindow {
 	private static instance: GameWindow;
 
-	private active = false;
+	private isActive = false;
 	private canvas: HTMLCanvasElement;
 	private listeners: Map<string, Map<GameEventHandler, EventListener>> = new Map();
+
+	private activeChangeHandlers: Set<ActiveChangeHandler> = new Set();
 
 	private constructor(canvas: HTMLCanvasElement) {
 		this.canvas = canvas;
 
 		canvas.onclick = () => {
-			if (!this.active) {
+			if (!this.isActive) {
 				this.togglePointerLock();
 			}
 		};
-
-		document.addEventListener("pointerlockchange", this.onPointerLockChange);
+		// 某些浏览器（例如 Chrome）不允许在解锁后立即锁定指针。https://github.com/pmndrs/drei/issues/1988
+		document.addEventListener("pointerlockchange", this.boundOnPointerLockChange);
 	}
 
 	public static get Instance() {
@@ -24,12 +28,9 @@ class GameWindow {
 	}
 
 	public get isInGame(): boolean {
-		return this.active;
+		return this.isActive;
 	}
 
-	/**
-	 * 获取单例实例，若未初始化则创建
-	 */
 	public static create(canvas: HTMLCanvasElement): GameWindow {
 		if (!this.instance) {
 			this.instance = new this(canvas);
@@ -37,20 +38,17 @@ class GameWindow {
 		return this.instance;
 	}
 
-	/**
-	 * 切换 Pointer Lock 状态
-	 */
-	public togglePointerLock() {
+	public async togglePointerLock() {
 		if (document.pointerLockElement === this.canvas) {
 			document.exitPointerLock();
 		} else {
-			this.canvas.requestPointerLock();
+			await this.canvas.requestPointerLock();
 		}
 	}
 
 	public addEventListener(type: string, handler: GameEventHandler, isBlock = true) {
 		const wrapped: EventListener = (event: Event) => {
-			if (this.active || !isBlock) {
+			if (this.isActive || !isBlock) {
 				handler(event);
 			}
 		};
@@ -85,11 +83,28 @@ class GameWindow {
 			}
 		}
 		this.listeners.clear();
+
+		document.removeEventListener("pointerlockchange", this.boundOnPointerLockChange);
+		this.activeChangeHandlers.clear();
+	}
+
+	// 触发激活状态变化回调
+	private notifyActiveChange(isActive: boolean, reason?: string) {
+		this.isActive = isActive;
+		for (const handler of this.activeChangeHandlers) {
+			try {
+				handler(isActive, reason);
+			} catch (e) {
+				console.error("ActiveChangeHandler error:", e);
+			}
+		}
 	}
 
 	private onPointerLockChange = () => {
-		this.active = document.pointerLockElement === this.canvas;
+		let isActive = document.pointerLockElement === this.canvas;
+		this.notifyActiveChange(isActive);
 	};
+	private readonly boundOnPointerLockChange = this.onPointerLockChange.bind(this);
 }
 
 export default GameWindow;

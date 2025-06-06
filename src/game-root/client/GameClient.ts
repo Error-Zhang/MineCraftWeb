@@ -1,6 +1,6 @@
 import { PlayerClient } from "./PlayerClient.ts";
 import { WorldClient } from "./WorldClient.ts";
-import { BASE_URL } from "@/api/request.ts";
+import { BASE_URL } from "@/ui-root/api/request.ts";
 
 class GameClient {
 	public playerClient: PlayerClient;
@@ -19,7 +19,9 @@ class GameClient {
 	public async joinWorld(worldId: number, playerId: number) {
 		await this.connectAll();
 		await this.playerClient.joinWorld(worldId, playerId);
-		return await this.worldClient.joinWorld(worldId, playerId);
+		const players = await this.playerClient.getPlayersInWorld();
+		const chunkSetting = await this.worldClient.joinWorld(worldId, playerId);
+		return { players, chunkSetting };
 	}
 
 	private async connectAll() {

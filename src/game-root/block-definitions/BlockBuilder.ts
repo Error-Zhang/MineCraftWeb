@@ -1,4 +1,4 @@
-import { AbstractMesh, Color3, Vector3, Vector4 } from "@babylonjs/core";
+import { AbstractMesh, Vector3, Vector4 } from "@babylonjs/core";
 import BlockType from "./BlockType.ts";
 import {
 	BlockProperties,
@@ -13,8 +13,7 @@ import {
 import BlockMeshRegistry from "@engine/block/BlockMeshRegistry.ts";
 import { blocksUvTable } from "@/game-root/block-definitions/TextureAtlas.ts";
 import { BlockMaterialManager } from "@engine/renderer/BlockMaterialManager.ts";
-import { BlockDataProcessor } from "@engine/block/BlockDataProcessor.ts";
-import { TAGS, TAG_GETTERS } from "./BlockTags.ts";
+import { TAG_GETTERS } from "./BlockTags.ts";
 
 type CubeGetters = Pick<CubeRender, "getUv" | "getColor" | "getRotation">;
 type CrossGetters = Pick<CrossRender, "getStage" | "getColor">;
@@ -56,11 +55,8 @@ function createModelRender(
 	return {
 		type: "model",
 		uvs,
-		loadModel: async (scene, position) => {
-			const material = BlockMaterialManager.getMaterialByKey(
-				scene,
-				BlockMaterialManager.PRESET_MATERIALS.MODEL
-			);
+		loadModel: async (scene, matManager: BlockMaterialManager, position) => {
+			const material = matManager.getMaterialByKey(BlockMaterialManager.PRESET_MATERIALS.MODEL);
 			const defaultSetMesh = (mesh: AbstractMesh) => {
 				mesh.material = material;
 				mesh.isPickable = false;
@@ -91,7 +87,6 @@ export class BlockBuilder {
 			properties?: Partial<BlockProperties>;
 			materialOptions?: RenderMaterial;
 		};
-		processor?: BlockDataProcessor;
 		tags: string[];
 		render: RenderComponent;
 		cubeGetters?: Pick<CubeRender, "getUv" | "getColor" | "getRotation">;

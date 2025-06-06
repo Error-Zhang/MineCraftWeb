@@ -49,7 +49,7 @@ export class WorldController {
 		this.chunkManager.onChunkUnload(callback);
 	}
 
-	onChunkUpdated(callback: (isInit: boolean) => void) {
+	onChunkUpdated(callback: () => void) {
 		this.chunkManager.onUpdated(callback);
 	}
 

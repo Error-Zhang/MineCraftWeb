@@ -23,10 +23,7 @@ export const TAG_GETTERS: {
 } = {
 	[TAGS.NATURE.PLANT]: {
 		cross: {
-			getStage(value: number) {
-				let data = BlockCoder.extractData(value);
-				return data & 7;
-			},
+			getStage: BlockCoder.decodePlantSize.bind(BlockCoder),
 		},
 	},
 	[TAGS.NATURE.LEAVES]: {
@@ -38,18 +35,7 @@ export const TAG_GETTERS: {
 	},
 	[TAGS.NATURE.Wood]: {
 		cube: {
-			getRotation(value: number) {
-				let data = BlockCoder.extractData(value);
-				data &= 3;
-				switch (data) {
-					case 1:
-						return 1;
-					case 2:
-						return 2;
-					default:
-						return 0;
-				}
-			},
+			getRotation: BlockCoder.decodeWoodDirection.bind(BlockCoder),
 		},
 	},
 };

@@ -5,8 +5,14 @@ export class BlockCoder {
 	/** 温度位掩码 (bit 8–11) */
 	static readonly TEMPERATURE_MASK = 0xf00;
 
+	static decodePlantIsWild(value: number) {
+		let data = this.extractData(value);
+		return (data & 8) != 0;
+	}
+
 	/** 提取 ID（低 12 位） */
 	static extractId(blockValue: number): number {
+		if (blockValue <= this.ID_MASK) return blockValue;
 		return blockValue & this.ID_MASK;
 	}
 
@@ -23,5 +29,23 @@ export class BlockCoder {
 	/** 提取温度（4 bit） */
 	static extractTemperature(shaftValue: number): number {
 		return (shaftValue & this.TEMPERATURE_MASK) >>> 8;
+	}
+
+	static decodePlantSize(value: number): number {
+		let data = this.extractData(value);
+		return data & 7;
+	}
+
+	static decodeWoodDirection(value: number) {
+		let data = this.extractData(value);
+		data &= 3;
+		switch (data) {
+			case 1:
+				return 1;
+			case 2:
+				return 2;
+			default:
+				return 0;
+		}
 	}
 }

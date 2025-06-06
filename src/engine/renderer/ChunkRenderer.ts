@@ -44,8 +44,9 @@ export class ChunkRenderer {
 		this.renderedBlocks = renderedBlocks;
 		// 创建网格
 		for (const [matKey, vertexData] of Object.entries(meshGroups)) {
-			const material = BlockMaterialManager.getMaterialByKey(this.scene, matKey);
+			const material = BlockMaterialManager.Instance.getMaterialByKey(matKey);
 			const mesh = this.createMesh(matKey, vertexData, material);
+			this.scene.addMesh(mesh);
 		}
 
 		this.buildModelBlocks(modelBlocks);
@@ -74,7 +75,11 @@ export class ChunkRenderer {
 		const [x, y, z] = posKey.split(",").map(Number);
 		const def = BlockRegistry.Instance.getById(blockId)!;
 		const render = <ModelRender>def.render;
-		const model = await render.loadModel(this.scene, new Vector3(x, y, z));
+		const model = await render.loadModel(
+			this.scene,
+			BlockMaterialManager.Instance,
+			new Vector3(x, y, z)
+		);
 		model.metadata = { blockId };
 		model.getChildMeshes().forEach(child => {
 			child.renderingGroupId = 1;

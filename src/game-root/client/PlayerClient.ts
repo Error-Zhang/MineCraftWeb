@@ -40,25 +40,54 @@ export class PlayerClient {
 	}
 
 	onPlayerMove(callback: (data: IPlayerMoveData) => void) {
-		this.connection.on("PlayerMove", callback);
+		this.safeOn("PlayerMove", callback);
 	}
 
 	onPlaceBlock(callback: (data: IBlockActionData) => void) {
-		this.connection.on("PlaceBlock", callback);
+		this.safeOn("PlaceBlock", callback);
 	}
 
 	onPlayerJoined(callback: (playerId: number) => void) {
-		this.connection.on("PlayerJoined", callback);
+		this.safeOn("PlayerJoined", callback);
 	}
 
 	onPlayerLeave(callback: (playerId: number) => void) {
-		this.connection.on("PlayerLeave", callback);
+		this.safeOn("PlayerLeave", callback);
+	}
+
+	async getPlayerPosition(playerId: number) {
+		const res = await this.connection.invoke<ApiResponse<IPlayerMoveData | null>>(
+			"GetPlayerPosition",
+			playerId
+		);
+		if (res.code !== 200) {
+			throw new Error("获取玩家位置失败:" + res.message);
+		}
+		return res.data;
+	}
+
+	async getPlayersInWorld() {
+		return await this.connection.invoke<number[]>("GetPlayersInWorld");
 	}
 
 	async joinWorld(worldId: number, playerId: number) {
-		const response = await this.connection.invoke<ApiResponse<any>>("JoinWorld", worldId, playerId);
+		const response = await this.connection.invoke<ApiResponse<null>>(
+			"JoinWorld",
+			worldId,
+			playerId
+		);
 		if (response.code !== 200) {
-			throw new Error(`Can't join player because ${response.message}`);
+			throw new Error(`加入世界失败:${response.message}`);
 		}
+	}
+
+	private safeOn<T>(event: string, callback: (data: T) => void) {
+		this.connection.on(event, (data: T) => {
+			try {
+				callback(data);
+			} catch (e) {
+				console.error(`[${event}] handler error:`, e);
+			}
+		});
 	}
 }

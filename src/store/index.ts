@@ -38,5 +38,4 @@ export const useWorldStore = create<WorldStore>(set => ({
 
 export const useBlockStore = create<BlockStore>((set, get) => ({
 	blockRegistry: null,
-	extractBlockId: (value: number) => value & 0x3fff,
 }));

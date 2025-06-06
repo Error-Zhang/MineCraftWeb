@@ -21,7 +21,7 @@ export class Environment extends SingleClass {
 	// 半径
 	public readonly MinUpdateDistance = this.Size * 0.4;
 
-	public openShadow: boolean = true;
+	public openShadow: boolean = false;
 	public shadowGenerator?: ShadowGenerator;
 
 	/** 每隔多少"游戏分钟"更新一次光照 */
@@ -36,10 +36,10 @@ export class Environment extends SingleClass {
 	private _lastUpdateStep = -1;
 	private cloudLayer!: Mesh;
 
-	constructor(scene: Scene, gameTime: GameTime) {
+	constructor(scene: Scene) {
 		super();
 		this.scene = scene;
-		this.gameTime = gameTime;
+		this.gameTime = GameTime.getInstance();
 		this.createSky();
 		this.createCloud();
 		this.createLight();
@@ -147,7 +147,7 @@ export class Environment extends SingleClass {
 		if (this.openShadow) {
 			this.directionalLight.shadowEnabled = true;
 			// 配置阴影
-			const shadowGenerator = new ShadowGenerator(1024 * 4, this.directionalLight);
+			const shadowGenerator = new ShadowGenerator(1024, this.directionalLight);
 			shadowGenerator.bias = 0;
 			shadowGenerator.normalBias = 0.01;
 			shadowGenerator.usePercentageCloserFiltering = true;

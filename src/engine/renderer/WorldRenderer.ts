@@ -3,11 +3,14 @@ import { ChunkManager } from "../chunk/ChunkManager";
 import { Scene } from "@babylonjs/core";
 import { Position } from "@engine/types/chunk.type.ts";
 import { Chunk } from "../chunk/Chunk";
+import { SingleClass } from "@engine/core/Singleton.ts";
 
-export class WorldRenderer {
+export class WorldRenderer extends SingleClass {
 	private renderers: Map<string, ChunkRenderer> = new Map();
 
-	constructor(private scene: Scene) {}
+	constructor(private scene: Scene) {
+		super();
+	}
 
 	/**
 	 * 更新区块中某一部分时调用

@@ -13,8 +13,8 @@ import {
 	seasonOptions,
 	worldModeOptions,
 } from "./constant";
-import { IWorld } from "@/api/interface.ts";
-import { worldApi } from "@/api";
+import { IWorld } from "@/ui-root/api/interface.ts";
+import { worldApi } from "../../../../api";
 
 interface WorldFormPanelProps {
 	world?: IWorld;

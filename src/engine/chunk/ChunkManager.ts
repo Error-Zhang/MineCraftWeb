@@ -14,9 +14,9 @@ const runIdle =
 
 export class ChunkManager extends SingleClass {
 	public static ChunkSize: number = 16;
-	public static ChunkHeight: number = 256;
+	public static ChunkHeight: number = 128;
 	// 半径(单位区块)
-	public static ViewDistance = 6;
+	public static ViewDistance = 4;
 	public static LoadDistance = this.ViewDistance;
 	public static UnloadDistance = this.LoadDistance + 2;
 	// 半径(单位方块)
@@ -28,18 +28,17 @@ export class ChunkManager extends SingleClass {
 	private readonly worldRenderer: WorldRenderer;
 	private unloadCallbacks: Array<(chunk: Chunk) => void> = [];
 	private loadCallbacks: Array<(chunk: Chunk) => void> = [];
-	private updatedCallbacks: Array<(isInit: boolean) => void> = [];
+	private updatedCallbacks: Array<() => void> = [];
 	private isUpdating: boolean = false;
-	private isInited: boolean = true;
 	private unloadTimer: number | null = null;
 	private chunksToUnload: Map<string, number> = new Map(); // 存储区块key和标记时间戳
-	private readonly UNLOAD_DELAY = 1000 * 60 * 5; // 60秒后卸载
-	private readonly POLLING_TIME = 1000 * 10; // 每分检查一次
+	private readonly UNLOAD_DELAY = 1000 * 60; // 60秒后卸载
+	private readonly POLLING_TIME = 1000 * 30; // 每分检查一次
 
-	constructor(generator: (coords: Coords) => Promise<Chunk[]>, worldRenderer: WorldRenderer) {
+	constructor(generator: (coords: Coords) => Promise<Chunk[]>) {
 		super();
 		this.generator = generator;
-		this.worldRenderer = worldRenderer;
+		this.worldRenderer = WorldRenderer.getInstance();
 		this.onChunkLoad(chunk => {
 			this.worldRenderer.buildChunk(chunk);
 		});
@@ -103,7 +102,7 @@ export class ChunkManager extends SingleClass {
 					const dist = this.getChunkDistance(cx, cz, chunkX, chunkZ);
 					const chunk = this.getChunk(cx, cz)!;
 					chunk.isVisible = dist <= ChunkManager.ViewDistance;
-					if (dist > ChunkManager.UnloadDistance * 2) {
+					if (dist > ChunkManager.UnloadDistance * 1.5) {
 						this.unloadChunk(chunk);
 					} else if (dist > ChunkManager.UnloadDistance) {
 						this.scheduleUnloadChunk(chunk);
@@ -140,7 +139,6 @@ export class ChunkManager extends SingleClass {
 					return distA - distB;
 				});
 
-				// 使用 Promise 包装 requestIdleCallback
 				await new Promise<void>(resolve => {
 					let currentIndex = 0;
 
@@ -165,16 +163,15 @@ export class ChunkManager extends SingleClass {
 			} catch (error) {
 				console.error("[VoxelEngine] Error updating chunks:", error);
 			} finally {
-				this.updatedCallbacks.forEach(callback => callback(this.isInited));
+				this.updatedCallbacks.forEach(callback => callback());
 				this.updateChunkEdges();
-				this.isInited = false;
 				const end = performance.now();
 				console.log(`[VoxelEngine] 区块更新完成，处理耗时: ${(end - start).toFixed(2)} ms`);
 			}
 		});
 	}
 
-	public onUpdated(callback: (isInit: boolean) => void) {
+	public onUpdated(callback: () => void) {
 		this.updatedCallbacks.push(callback);
 	}
 

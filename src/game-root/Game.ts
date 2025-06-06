@@ -1,14 +1,14 @@
-import { Scene, Vector3 } from "@babylonjs/core";
+import { Scene } from "@babylonjs/core";
 import { AdvancedDynamicTexture, TextBlock } from "@babylonjs/gui";
 import { throttle } from "@/game-root/utils/lodash.ts";
 import { VoxelEngine } from "@engine/core/VoxelEngine.ts";
-import { ChunkData, Coords, Position } from "@engine/types/chunk.type.ts";
+import { ChunkData, Coords } from "@engine/types/chunk.type.ts";
 import { Chunk } from "@engine/chunk/Chunk.ts";
 import { blocks, getBlocksMap } from "@/game-root/block-definitions/blocks.ts";
 import Assets from "@/game-root/assets";
 import { useBlockStore, usePlayerStore, useWorldStore } from "@/store";
 import { Player } from "@/game-root/player/Player.ts";
-import { blockApi, worldApi } from "@/api";
+import { blockApi, worldApi } from "@/ui-root/api";
 import GameWindow from "@/game-root/core/GameWindow.ts";
 import { PlayerInputSystem } from "@/game-root/player/PlayerInputSystem.ts";
 import GameClient from "@/game-root/client/GameClient.ts";
@@ -17,6 +17,8 @@ import { IChunkSetting } from "@/game-root/client/interface.ts";
 import { WorldController } from "@engine/core/WorldController.ts";
 import { NpcPlayer } from "@/game-root/player/NpcPlayer.ts";
 import MathUtils from "@/game-root/utils/MathUtils.ts";
+import { BlockCoder } from "@/game-root/block-definitions/BlockCoder.ts";
+import { SurvivalCamera } from "@/game-root/player/PlayerCamera.ts";
 
 // import { Inspector } from "@babylonjs/inspector";
 
@@ -55,9 +57,11 @@ export class Game {
 	public async start() {
 		console.log("Starting Game");
 		this.scene = this.voxelEngine.createScene();
-		this.voxelEngine.loadTextures(this.scene, [{ key: "blocks", path: Assets.blocks.atlas }]);
-
-		const chunkSetting = await this.gameClient.joinWorld(
+		this.attachFPSDisplay(this.scene);
+		this.voxelEngine.registerTexturesAndMaterials(this.scene, [
+			{ key: "blocks", path: Assets.blocks.atlas },
+		]);
+		const { chunkSetting, players } = await this.gameClient.joinWorld(
 			this.worldStore.worldId,
 			this.playerStore.playerId
 		);
@@ -65,23 +69,32 @@ export class Game {
 		const worldController = this.registerChunk(chunkSetting);
 
 		this.player = new Player(this.scene, this.canvas);
+		this.bindEvents(worldController);
 
-		await this.bindEvents(worldController);
+		worldController.updateChunk(this.playerStore.origin).then(_ => {
+			players.forEach(player => {
+				this.loadNPCPlayer(player);
+			});
+			this.initPlayerPosition(this.player.setPosition.bind(this.player));
 
-		this.voxelEngine.start(this.scene);
-
-		await worldController.updateChunk(this.playerStore.origin);
-
-		this.attachFPSDisplay(this.scene);
+			this.voxelEngine.onUpdate(() => {
+				let dt = this.voxelEngine.engine.getDeltaTime();
+				this.player.update(dt);
+			});
+			this.voxelEngine.start(this.scene);
+		});
 	}
 
 	public dispose() {
-		this.voxelEngine.dispose();
 		this.gameClient.disConnectAll();
-		this.npcPlayers.clear();
+		this.player.dispose();
+		this.voxelEngine.disposeScene();
 		this.worldStore.reset();
 		this.playerStore.reset();
-		this.scene.dispose();
+		this.npcPlayers.forEach(player => {
+			player.dispose();
+		});
+		this.npcPlayers.clear();
 		playerEvents.removeAllListeners();
 	}
 
@@ -90,20 +103,37 @@ export class Game {
 		GameWindow.Instance.dispose();
 	}
 
-	private async bindEvents(worldController: WorldController) {
+	private loadNPCPlayer(playerId: number) {
+		const player = new NpcPlayer(this.scene, playerId);
+		player
+			.loadModel(Assets.player.models.HumanMale, Assets.player.textures.HumanMaleTexture1)
+			.then(model => {
+				this.voxelEngine.addMesh(model);
+				this.gameClient.playerClient.getPlayerPosition(playerId).then(moveData => {
+					if (moveData) {
+						const { x, y, z, pitch, yaw } = moveData;
+						player.setPosition(x, y, z);
+						player.setRotation(yaw, pitch);
+					} else {
+						this.initPlayerPosition(player.setPosition.bind(player));
+					}
+				});
+			});
+		this.npcPlayers.set(playerId, player);
+	}
+
+	private bindEvents(worldController: WorldController) {
 		const playerClient = this.gameClient.playerClient;
 
 		playerClient.onPlayerJoined(playerId => {
 			console.log("playerJoined", playerId);
-			const player = new NpcPlayer(this.scene, playerId);
-			this.initPlayerPosition(player.setPosition);
-			this.npcPlayers.set(playerId, player);
+			this.loadNPCPlayer(playerId);
 		});
 
-		playerClient.onPlayerMove(moveData => {
-			const player = this.npcPlayers.get(moveData.playerId);
-			const { x, y, z } = moveData;
-			player?.moveTo(new Vector3(x, y, z));
+		playerClient.onPlayerMove(({ playerId, x, y, z, pitch, yaw }) => {
+			const player = this.npcPlayers.get(playerId);
+			player?.moveTo(x, y, z);
+			player?.setRotation(yaw, pitch);
 		});
 
 		playerClient.onPlayerLeave(playerId => {
@@ -117,48 +147,51 @@ export class Game {
 
 		this.player.onPlaceBlock(playerClient.sendPlaceBlock.bind(playerClient));
 
-		playerEvents.on("move", (playerPos: Position) => {
-			worldController.updateChunk(playerPos);
-			const { x, y, z } = playerPos;
-			playerClient.sendPlayerMove({ x, y, z, playerId: this.playerStore.playerId });
-		});
-
-		worldController.onChunkUpdated(isInit => {
-			if (isInit) {
-				this.initPlayerPosition(position => this.player.setPosition(position));
-			}
-		});
+		playerEvents.on(
+			"playerMoved",
+			throttle((position: any, rotation: any) => {
+				worldController.updateChunk(position);
+				playerClient.sendPlayerMove({
+					playerId: this.playerStore.playerId,
+					...position,
+					...rotation,
+				});
+			}, 100)
+		);
 	}
 
-	private initPlayerPosition(setPosition: (position: Vector3) => void) {
+	private initPlayerPosition(setPosition: (x: number, y: number, z: number) => void) {
 		const [x, y, z] = this.worldStore.worldController!.getChunkCenterTop(
 			this.playerStore.origin.x,
 			this.playerStore.origin.z
 		);
-		setPosition(new Vector3(x, y + 2, z));
+		setPosition(x, y + 2, z);
+		if (this.player.camera instanceof SurvivalCamera) {
+			this.player.camera.isGrounded = false;
+		}
 	}
 
 	private flatWorldGenerator() {
 		const generator = (chunkX: number, chunkZ: number) => {
 			const chunkData: ChunkData = {
-				blocks: new Uint16Array(65536),
+				blocks: new Uint16Array(65536 / 2),
 				shafts: new Uint8Array(256),
 				position: {
 					x: chunkX,
 					z: chunkZ,
 				},
 			};
-
-			// 生成基础地形
-			for (let y = 0; y < 256; y++) {
-				const id = y == 4 ? 4 : y < 4 ? 3 : 0;
-				for (let z = 0; z < 16; z++) {
-					for (let x = 0; x < 16; x++) {
-						const index = y * 16 * 16 + z * 16 + x;
+			for (let z = 0; z < 16; z++) {
+				for (let x = 0; x < 16; x++) {
+					// 生成基础地形
+					for (let y = 0; y < 128; y++) {
+						const id = y == 4 ? 4 : y < 4 ? 3 : 0;
+						const index = Chunk.getIndex(x, y, z);
 						chunkData.blocks[index] = id;
 					}
 				}
 			}
+
 			return Chunk.fromJSON(chunkData);
 		};
 		return async (coords: Coords) => coords.map(coord => generator(coord.x, coord.z));
@@ -197,10 +230,7 @@ export class Game {
 			return chunksData.map(
 				(chunkData: { cells: number[]; shafts: number[]; x: number; z: number }) =>
 					Chunk.fromJSON({
-						blocks: <Uint16Array>MathUtils.decompressRLE(chunkData.cells, value => {
-							const blockId = this.blockStore.extractBlockId(value);
-							return blockId;
-						}),
+						blocks: <Uint16Array>MathUtils.decompressRLE(chunkData.cells),
 						shafts: <Uint8Array>MathUtils.decompressRLE(chunkData.shafts),
 						position: {
 							x: chunkData.x,
@@ -226,7 +256,10 @@ export class Game {
 			id: blockTypes.byName[block.blockType] ?? block.id,
 		}));
 		// 合并方块表:服务器 > 客户端
-		const blockRegistry = this.voxelEngine.registerBlocks(combinBlocks);
+		const blockRegistry = VoxelEngine.registerBlocks(
+			combinBlocks,
+			BlockCoder.extractId.bind(BlockCoder)
+		);
 		useBlockStore.setState({ blockRegistry });
 	}
 }

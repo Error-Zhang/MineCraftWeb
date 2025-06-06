@@ -7,7 +7,7 @@ class MathUtils {
 
 	static decompressRLE(
 		compressed: number[],
-		decode?: (value: number) => number
+		decode?: (value: number, index: number) => number
 	): Uint16Array | Uint8Array {
 		if (!compressed || compressed.length === 0) {
 			throw new Error("Compressed value must be greater than 0");
@@ -26,7 +26,7 @@ class MathUtils {
 			const value = compressed[i];
 			const count = compressed[i + 1];
 			for (let j = 0; j < count; j++) {
-				result[pos++] = decode ? decode(value) : value;
+				result[pos++] = decode ? decode(value, pos) : value;
 			}
 		}
 

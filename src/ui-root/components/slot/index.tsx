@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import "./index.less";
 import { Nullable } from "@babylonjs/core";
 import { HandSlotController } from "@/ui-root/components/slot/HandSlotManager.tsx";
-import { blockApi } from "@/api";
+import { blockApi } from "../../api";
 
 export type SlotType = Nullable<{
 	id: number;

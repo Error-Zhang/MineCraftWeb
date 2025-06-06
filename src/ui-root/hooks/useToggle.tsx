@@ -14,8 +14,8 @@ type KeyBinding = string | string[];
 export function useToggle(
 	keys: KeyBinding,
 	onToggle: () => void,
-	qkeys: KeyBinding,
-	onEscape: () => void,
+	qkeys?: KeyBinding,
+	onEscape?: () => void,
 	isToggle?: () => boolean
 ) {
 	useEffect(() => {
@@ -25,14 +25,18 @@ export function useToggle(
 			const pressedKey = e.key.toLowerCase();
 
 			const keyArray = Array.isArray(keys) ? keys : [keys];
-			const qkeyArray = Array.isArray(qkeys) ? qkeys : [qkeys];
+			const qkeyArray = qkeys ? (Array.isArray(qkeys) ? qkeys : [qkeys]) : [];
 			const game = GameWindow.Instance;
 
 			if (game.isInGame && keyArray.some(key => key.toLowerCase() === pressedKey)) {
 				onToggle();
 				game.togglePointerLock();
-			} else if (!game.isInGame && qkeyArray.some(key => key.toLowerCase() === pressedKey)) {
-				onEscape();
+			} else if (
+				qkeys?.length &&
+				!game.isInGame &&
+				qkeyArray.some(key => key.toLowerCase() === pressedKey)
+			) {
+				onEscape?.();
 				game.togglePointerLock();
 			}
 		};

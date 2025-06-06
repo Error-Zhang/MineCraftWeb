@@ -19,14 +19,13 @@ import MathUtils from "@/game-root/utils/MathUtils.ts";
 import { useGameStore, usePlayerStore, useWorldStore } from "@/store";
 import { PlayerInputSystem } from "@/game-root/player/PlayerInputSystem.ts";
 import { PlayerModel } from "@/game-root/player/PlayerModel.ts";
-import Assets from "@/game-root/assets";
 
 export class Player {
-	private camera: BasePlayerCamera;
+	public playerModel?: PlayerModel;
+	public camera: BasePlayerCamera;
 	// 场景、相机、世界等
 	private scene: Scene;
 	private debugHelper: DebugHelper;
-
 	private maxPlaceDistance = 12; // 最大方块放置距离
 	private placeBlockCallBacks: ((
 		position: { x: number; y: number; z: number },
@@ -39,11 +38,6 @@ export class Player {
 		const Camera = useGameStore.getState().gameMode ? SurvivalCamera : CreativeCamera;
 
 		this.camera = new Camera(scene, canvas);
-
-		const playerModel = new PlayerModel(scene);
-		playerModel.loadPlayerModel(Assets.player.models.HumanMale).then(model => {
-			this.camera.setChild(model);
-		});
 
 		this.addEventListener();
 		this.addCrossHair();
@@ -61,12 +55,27 @@ export class Player {
 		return usePlayerStore.getState();
 	}
 
-	onPlaceBlock(callback: (position: { x: number; y: number; z: number }, blockId: number) => void) {
+	public dispose() {
+		this.camera.dispose();
+	}
+
+	public async loadModel(modelPath: string, texturePath: string) {
+		this.playerModel = new PlayerModel(this.scene);
+		return await this.playerModel.loadModel(modelPath, texturePath);
+	}
+
+	public update(dt: number) {
+		this.camera.update(dt);
+	}
+
+	public onPlaceBlock(
+		callback: (position: { x: number; y: number; z: number }, blockId: number) => void
+	) {
 		this.placeBlockCallBacks.push(callback);
 	}
 
-	public setPosition(position: Vector3): void {
-		this.camera.setPosition(position);
+	public setPosition(x: number, y: number, z: number): void {
+		this.camera.setPosition(x, y, z);
 	}
 
 	// 处理键盘输入

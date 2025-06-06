@@ -9,6 +9,7 @@ import {
 	Texture,
 } from "@babylonjs/core";
 import { Color } from "../types/block.type.ts";
+import { SingleClass } from "@engine/core/Singleton.ts";
 
 /** 材质文档
  * https://doc.babylonjs.com/features/featuresDeepDive/materials/using/pbrMaterials
@@ -82,10 +83,14 @@ export interface MaterialConfig {
 	shadowProperties?: any;
 }
 
-export class BlockTextureManager {
-	public static textureCache: Map<string, Texture> = new Map();
+export class BlockTextureManager extends SingleClass {
+	private textureCache: Map<string, Texture> = new Map();
 
-	static registerTextures(scene: Scene, textures: { key: string; path: string }[]) {
+	constructor(public scene: Scene) {
+		super();
+	}
+
+	registerTextures(textures: { key: string; path: string }[]) {
 		for (const { path, key } of textures) {
 			if (!this.textureCache.has(path)) {
 				/**
@@ -93,7 +98,13 @@ export class BlockTextureManager {
 				 * 4：反转纹理的 Y(V) 轴方向, 改成从左上角开始，或者使用texture.vScale = -1;
 				 * 5：采样方法：最近点采样（nearest）NEAREST_NEAREST 或 NEAREST_NEAREST_MIPNEAREST (开启mipMap使用)直接精确采样像素防止模糊（mc首选）
 				 */
-				let texture = new Texture(path, scene, false, false, Texture.NEAREST_NEAREST_MIPNEAREST);
+				let texture = new Texture(
+					path,
+					this.scene,
+					false,
+					false,
+					Texture.NEAREST_NEAREST_MIPNEAREST
+				);
 				texture.hasAlpha = true;
 
 				this.textureCache.set(key, texture);
@@ -101,15 +112,20 @@ export class BlockTextureManager {
 		}
 	}
 
-	static getTexture(key?: string): Texture {
+	getTexture(key?: string): Texture {
 		if (!key) key = Array.from(this.textureCache.keys())[0];
 		let texture = this.textureCache.get(key);
 		if (!texture) throw new Error(`Texture not found: ${key}`);
 		return texture;
 	}
+
+	public override dispose() {
+		this.textureCache.forEach(texture => texture.dispose());
+		this.textureCache.clear();
+	}
 }
 
-export class BlockMaterialManager {
+export class BlockMaterialManager extends SingleClass {
 	// 预设材质类型
 	static readonly PRESET_MATERIALS = {
 		SOLID: "solid",
@@ -121,8 +137,19 @@ export class BlockMaterialManager {
 		MODEL: "model",
 		METAL: "metal",
 	} as const;
-	private static materialCache: Map<string, Material> = new Map();
 	private static materialPresets: Map<string, MaterialConfig> = new Map();
+	private materialCache: Map<string, Material> = new Map();
+
+	constructor(public scene: Scene) {
+		super();
+		if (!BlockMaterialManager.materialPresets.size) {
+			BlockMaterialManager.initializePresetMaterials();
+		}
+	}
+
+	public static get Instance(): BlockMaterialManager {
+		return this.getInstance();
+	}
 
 	// 初始化预设材质
 	static initializePresetMaterials() {
@@ -252,7 +279,21 @@ export class BlockMaterialManager {
 		return this.materialPresets.get(key);
 	}
 
-	static createMaterial(scene: Scene, config: MaterialConfig): Material {
+	// 注册自定义材质
+	static registerCustomMaterial(key: string, config: MaterialConfig) {
+		if (this.materialPresets.has(key)) {
+			throw new Error(`material key ${key} already exists`);
+		}
+		this.registerMaterialPreset(key, config);
+	}
+
+	static registerCustomMaterials(materials: { key: string; material: MaterialConfig }[]) {
+		materials.forEach(({ key, material }) => {
+			this.registerCustomMaterial(key, material);
+		});
+	}
+
+	createMaterial(config: MaterialConfig): Material {
 		const {
 			materialType = "standard",
 			color = new Color3(1, 1, 1),
@@ -271,15 +312,17 @@ export class BlockMaterialManager {
 		} = config;
 
 		const createMaterial =
-			materialType === "standard" ? this.createStandardMaterial : this.createPBRMaterial;
+			materialType === "standard"
+				? this.createStandardMaterial.bind(this)
+				: this.createPBRMaterial.bind(this);
 
 		const mat: Material = shader
-			? this.createShaderMaterial(scene, {
+			? this.createShaderMaterial({
 					textureKey,
 					backFaceCulling,
 					shader,
 				})
-			: createMaterial(scene, {
+			: createMaterial({
 					textureKey,
 					color,
 					emissive,
@@ -298,52 +341,41 @@ export class BlockMaterialManager {
 	}
 
 	// 获取材质（带缓存）
-	static getMaterial(scene: Scene, key: string, config: MaterialConfig): Material {
+	getMaterial(key: string, config: MaterialConfig): Material {
 		if (this.materialCache.has(key)) {
 			return this.materialCache.get(key)!;
 		}
 
-		const material = this.createMaterial(scene, config);
+		const material = this.createMaterial(config);
 		this.materialCache.set(key, material);
 		return material;
 	}
 
 	// 根据材质键获取材质
-	static getMaterialByKey(scene: Scene, matKey: string): Material {
-		const presetConfig = this.getMaterialPreset(matKey);
+	getMaterialByKey(matKey: string): Material {
+		const presetConfig = BlockMaterialManager.getMaterialPreset(matKey);
 
 		if (!presetConfig) {
 			throw new Error(`No material preset found for key: ${matKey}`);
 		}
 
-		return this.getMaterial(scene, matKey, presetConfig);
-	}
-
-	// 注册自定义材质
-	static registerCustomMaterial(key: string, config: MaterialConfig) {
-		if (this.materialCache.has(key)) {
-			throw new Error(`material key ${key} already exists`);
-		}
-		this.registerMaterialPreset(key, config);
+		return this.getMaterial(matKey, presetConfig);
 	}
 
 	// 清除材质缓存
-	static clearCache() {
+	public override dispose() {
 		this.materialCache.clear();
 	}
 
 	// 创建Shader材质
-	private static createShaderMaterial(
-		scene: Scene,
-		config: {
-			textureKey?: string;
-			backFaceCulling: boolean;
-			shader: ShaderConfig;
-		}
-	): Material {
+	private createShaderMaterial(config: {
+		textureKey?: string;
+		backFaceCulling: boolean;
+		shader: ShaderConfig;
+	}): Material {
 		const shaderMaterial = new ShaderMaterial(
 			"customShaderMaterial",
-			scene,
+			this.scene,
 			{
 				vertex: config.shader.vertex,
 				fragment: config.shader.fragment,
@@ -367,7 +399,9 @@ export class BlockMaterialManager {
 
 		// 设置纹理
 		if (config.textureKey) {
-			const texture = BlockTextureManager.getTexture(config.textureKey);
+			const texture = BlockTextureManager.getInstance<BlockTextureManager>().getTexture(
+				config.textureKey
+			);
 			shaderMaterial.setTexture("diffuseSampler", texture);
 		}
 
@@ -390,8 +424,8 @@ export class BlockMaterialManager {
 			// 为每个材质创建独立的时间变量
 			let materialTime = 0;
 
-			const observer = scene.onBeforeRenderObservable.add(() => {
-				const deltaTime = scene.getEngine().getDeltaTime() / 1000;
+			const observer = this.scene.onBeforeRenderObservable.add(() => {
+				const deltaTime = this.scene.getEngine().getDeltaTime() / 1000;
 				materialTime += deltaTime;
 
 				// 设置材质特定的时间uniform
@@ -405,7 +439,7 @@ export class BlockMaterialManager {
 
 			// 在材质销毁时移除观察者
 			shaderMaterial.onDisposeObservable.add(() => {
-				scene.onBeforeRenderObservable.remove(observer);
+				this.scene.onBeforeRenderObservable.remove(observer);
 			});
 		}
 
@@ -413,9 +447,11 @@ export class BlockMaterialManager {
 	}
 
 	// 创建标准材质
-	private static createStandardMaterial(scene: Scene, config: MaterialCreationConfig): Material {
-		const standardMaterial = new StandardMaterial("standardMaterial", scene);
-		const texture = BlockTextureManager.getTexture(config.textureKey);
+	private createStandardMaterial(config: MaterialCreationConfig): Material {
+		const standardMaterial = new StandardMaterial("standardMaterial", this.scene);
+		const texture = BlockTextureManager.getInstance<BlockTextureManager>().getTexture(
+			config.textureKey
+		);
 
 		standardMaterial.diffuseTexture = texture;
 		standardMaterial.alpha = config.alpha;
@@ -430,9 +466,11 @@ export class BlockMaterialManager {
 	}
 
 	// 创建PBR材质
-	private static createPBRMaterial(scene: Scene, config: MaterialCreationConfig): Material {
-		const pbrMaterial = new PBRMaterial("pbrMaterial", scene);
-		const texture = BlockTextureManager.getTexture(config.textureKey);
+	private createPBRMaterial(config: MaterialCreationConfig): Material {
+		const pbrMaterial = new PBRMaterial("pbrMaterial", this.scene);
+		const texture = BlockTextureManager.getInstance<BlockTextureManager>().getTexture(
+			config.textureKey
+		);
 
 		pbrMaterial.albedoTexture = texture;
 		pbrMaterial.alpha = config.alpha;

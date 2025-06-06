@@ -1,56 +1,50 @@
 import { Color3 } from "@babylonjs/core";
 
-function parseHexColor(hex: string): Color3 {
-	const r = parseInt(hex.slice(1, 3), 16) / 255;
-	const g = parseInt(hex.slice(3, 5), 16) / 255;
-	const b = parseInt(hex.slice(5, 7), 16) / 255;
-	return new Color3(r, g, b);
-}
-
-function lerpColor(a: Color3, b: Color3, t: number): Color3 {
-	return new Color3(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t);
-}
-
-// 季节基础色
-const grassSeasonColors = [
-	parseHexColor("#b3e85d"), // 春：亮绿
-	parseHexColor("#5cb531"), // 夏：中绿
-	parseHexColor("#d79b3d"), // 秋：土黄
-	parseHexColor("#d8f0ff"), // 冬：浅青白
+// 预设草地颜色（春夏秋冬）
+const GRASS_COLORS: Readonly<Color3[]> = [
+	new Color3(0.7, 0.91, 0.36), // 春：亮绿
+	new Color3(0.36, 0.71, 0.19), // 夏：正绿
+	new Color3(0.84, 0.61, 0.24), // 秋：土黄
+	new Color3(0.85, 0.94, 1.0), // 冬：浅青白
 ];
 
-// 简化的湿润度影响
-const biomeWet = parseHexColor("#4df267"); // 湿润绿
-const biomeDry = parseHexColor("#d4c18a"); // 干旱黄褐
-
-export function getGrassColor(temperature: number, humidity: number, season: number): Color3 {
-	const tempNorm = Math.max(0, Math.min(temperature / 15, 1));
-	const humidNorm = Math.max(0, Math.min(humidity / 15, 1));
-	const wetness = (tempNorm + humidNorm) / 2;
-
-	const base = grassSeasonColors[season % 4];
-	const biomeBlend = lerpColor(biomeDry, biomeWet, wetness);
-	return lerpColor(base, biomeBlend, 0.25); // 25% 环境色影响
+// 快速返回草地颜色（无计算）
+export function getGrassColor(season: number): Color3 {
+	return GRASS_COLORS[season & 3]; // 等价于 season % 4，性能更好
 }
 
-const foliageSeasonColors = [
-	parseHexColor("#78c850"), // 春：鲜绿
-	parseHexColor("#5cb531"), // 夏：深绿
-	parseHexColor("#cc7733"), // 秋：橙褐
-	parseHexColor("#f0f8ff"), // 冬：雪白偏蓝
+// 原始基础色（春夏秋冬）
+const FOLIAGE_BASE_COLORS: Readonly<Color3[]> = [
+	new Color3(0.47, 0.78, 0.31), // 春：鲜绿
+	new Color3(0.36, 0.71, 0.19), // 夏：深绿
+	new Color3(0.8, 0.47, 0.2), // 秋：橙褐
+	new Color3(0.94, 0.97, 1.0), // 冬：雪白偏蓝
 ];
 
-function varyColor(color: Color3, seed: number): Color3 {
-	const offset = ((seed % 1000) / 1000 - 0.5) * 0.2 + 1; // ±10%
-	return new Color3(
-		Math.min(1, color.r * offset),
-		Math.min(1, color.g * offset),
-		Math.min(1, color.b * offset)
-	);
+// 缓存扰动结果，每个季节预生成 N 个颜色
+const VARIANTS = 6;
+const foliageCache: Color3[][] = [];
+
+// 预生成带扰动的颜色
+for (let season = 0; season < 4; season++) {
+	const base = FOLIAGE_BASE_COLORS[season];
+	const list: Color3[] = [];
+	for (let i = 0; i < VARIANTS; i++) {
+		const offset = 0.9 + (i / (VARIANTS - 1)) * 0.2; // [0.9, 1.1]
+		list.push(
+			new Color3(
+				Math.min(1, base.r * offset),
+				Math.min(1, base.g * offset),
+				Math.min(1, base.b * offset)
+			)
+		);
+	}
+	foliageCache[season] = list;
 }
 
+// 快速返回扰动后的颜色（只索引，不计算）
 export function getFoliageColor(value: number, season: number): Color3 {
-	const seed = (value * 16807 + 233) % 9973; // 与草分开扰动
-	const base = foliageSeasonColors[season % 4];
-	return varyColor(base, seed);
+	const s = season & 3;
+	const v = value & (VARIANTS - 1); // 快速模 VARIANTS（假设 VARIANTS 为 2 的幂）
+	return foliageCache[s][v];
 }

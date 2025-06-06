@@ -18,9 +18,9 @@ import {
 import WorldPlayerPanel from "@/ui-root/views/start-screen/components/world-player-panel";
 
 import GameSelect from "@/ui-root/components/game-select";
-import { IWorld } from "@/api/interface.ts";
+import { IWorld } from "@/ui-root/api/interface.ts";
 import { useGameStore, usePlayerStore, useUserStore, useWorldStore } from "@/store";
-import { playerApi, worldApi } from "@/api";
+import { playerApi, worldApi } from "../../../../api";
 
 const WorldManagerMenu: React.FC<{ setPage: (page: ScreenPage) => void }> = ({ setPage }) => {
 	const [worldList, setWorldList] = useState<IWorld[]>([]);

@@ -1,19 +1,18 @@
 import { Color3, Color4, VertexData } from "@babylonjs/core";
 import { Chunk } from "../chunk/Chunk.ts";
 import { BlockRegistry } from "../block/BlockRegistry";
-import { BlockDataProcessor } from "../block/BlockDataProcessor.ts";
 import { CrossRender, CubeRender, RenderComponent, RenderMaterial } from "../types/block.type.ts";
 import { ChunkManager } from "../chunk/ChunkManager.ts";
 
 export const EdgeConfigs = [
 	{
-		edge: 0, // 左边界 (-X)
+		edge: 1, // 左边界 (-X)
 		dx: -1,
 		dz: 0,
 		getCoords: (i: number, y: number) => [0, y, i],
 	},
 	{
-		edge: 1, // 右边界 (+X)
+		edge: 0, // 右边界 (+X)
 		dx: 1,
 		dz: 0,
 		getCoords: (i: number, y: number) => [ChunkManager.ChunkSize - 1, y, i],
@@ -152,20 +151,10 @@ export class ChunkMeshBuilder {
 
 		for (const { edge, getCoords } of EdgeConfigs) {
 			if (!chunk.edges.has(edge)) continue;
-
-			for (let y = 0; y < height; y++) {
-				for (let i = 0; i < size; i++) {
-					// 跳过角落
-					const isLeftOrRightEdge = edge === 0 || edge === 1;
-					const isTopOrBottomEdge = edge === 2 || edge === 3;
-
-					// 左/右边跳过上下角
-					if (isLeftOrRightEdge && (i === 0 || i === size - 1)) continue;
-
-					// 上/下边跳过左右角
-					if (isTopOrBottomEdge && (i === 0 || i === size - 1)) continue;
-
+			for (let i = 0; i < size; i++) {
+				for (let y = 0; y < height; y++) {
 					const [x, yCoord, z] = getCoords(i, y);
+					if (context.renderedBlocks.has(`${x},${yCoord},${z}`)) continue;
 					this.processBlock(chunk, [x, yCoord, z], context);
 				}
 			}
@@ -248,7 +237,7 @@ export class ChunkMeshBuilder {
 	private static getBlockAt(x: number, y: number, z: number, chunk?: Chunk) {
 		let blockValue = chunk ? chunk.getBlock(x, y, z) : ChunkManager.getBlockAt(x, y, z);
 		let envValue = chunk ? chunk.getEnvironment(x, z) : ChunkManager.Instance.getEnvironment(x, z);
-		let id = BlockDataProcessor.getId(blockValue);
+		let id = BlockRegistry.Instance.decodeId?.(blockValue) ?? blockValue;
 		let def = BlockRegistry.Instance.getById(id);
 		return [blockValue, id, def, envValue] as const;
 	}

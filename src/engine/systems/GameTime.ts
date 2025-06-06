@@ -1,4 +1,6 @@
-export class GameTime {
+import { SingleClass } from "@engine/core/Singleton.ts";
+
+export class GameTime extends SingleClass {
 	/** 游戏中一天的时长（秒） */
 	public readonly GAME_SECONDS_PER_DAY = 86400;
 	public readonly GAME_SECONDS_PER_HOUR = 3600;
@@ -6,7 +8,9 @@ export class GameTime {
 
 	private _totalGameSeconds = this.GAME_SECONDS_PER_DAY / 2; // 从中午开始
 
-	constructor(private readonly realSecondsPerDay: number = 1800) {}
+	constructor(private readonly realSecondsPerDay: number = 1800) {
+		super();
+	}
 
 	/** 当前是第几天 */
 	public get day(): number {
@@ -68,7 +72,7 @@ export class GameTime {
 	}
 
 	/** 重置为中午（游戏时间 12:00） */
-	public reset() {
+	public dispose() {
 		this._totalGameSeconds = this.GAME_SECONDS_PER_DAY / 2;
 	}
 }

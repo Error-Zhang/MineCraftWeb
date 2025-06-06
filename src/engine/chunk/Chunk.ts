@@ -25,6 +25,17 @@ export class Chunk {
 		return chunk;
 	}
 
+	public static getIndex(x: number, y: number, z: number) {
+		return y + x * ChunkManager.ChunkHeight + z * ChunkManager.ChunkHeight * ChunkManager.ChunkSize;
+	}
+
+	public static getCoordinates(index: number): { x: number; y: number; z: number } {
+		const y = index % ChunkManager.ChunkHeight;
+		const x = Math.floor(index / ChunkManager.ChunkHeight) % ChunkManager.ChunkSize;
+		const z = Math.floor(index / (ChunkManager.ChunkHeight * ChunkManager.ChunkSize));
+		return { x, y, z };
+	}
+
 	public getBlock(x: number, y: number, z: number): number {
 		if (!this.isInBounds(x, y, z)) return -1;
 		return this.blocks[this.index(x, y, z)] ?? 0;

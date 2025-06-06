@@ -6,6 +6,7 @@ import Assets from "@/game-root/assets";
 import { TAGS } from "@/game-root/block-definitions/BlockTags.ts";
 import { BlockCoder } from "@/game-root/block-definitions/BlockCoder.ts";
 import { getGrassColor } from "@/game-root/block-definitions/ColorHelper.ts";
+import { Color3 } from "@babylonjs/core";
 
 // 方块定义
 export const blocks: BlockDefinition<Record<string, any>>[] = [
@@ -21,10 +22,7 @@ export const blocks: BlockDefinition<Record<string, any>>[] = [
 		.withCubeGetters({
 			getColor(value, face, envValue) {
 				if (face === 4) {
-					const temperature = BlockCoder.extractTemperature(envValue!);
-					const humidity = BlockCoder.extractHumidity(envValue!);
-
-					return getGrassColor(temperature, humidity, 1);
+					return getGrassColor(1);
 				}
 			},
 		})
@@ -112,10 +110,9 @@ export const blocks: BlockDefinition<Record<string, any>>[] = [
 		})
 		.withCrossGetters({
 			getColor(_, __, envValue) {
-				const temperature = BlockCoder.extractTemperature(envValue!) - 4;
-				const humidity = BlockCoder.extractHumidity(envValue!) - 4;
-
-				return getGrassColor(temperature, humidity, 0);
+				const temperature = BlockCoder.extractTemperature(envValue!);
+				const humidity = BlockCoder.extractHumidity(envValue!);
+				return getGrassColor(1);
 			},
 		})
 		.asCross()
@@ -419,6 +416,16 @@ export const blocks: BlockDefinition<Record<string, any>>[] = [
 			hardness: 0,
 			toolType: "shears",
 			flammable: true,
+		})
+		.withCrossGetters({
+			getColor(value) {
+				if (BlockCoder.decodePlantIsWild(value)) {
+					return Color3.Green();
+				}
+			},
+			getStage(value) {
+				return BlockCoder.decodePlantSize(value);
+			},
 		})
 		.asCross()
 		.build(),

@@ -18,7 +18,6 @@ export class WorldClient {
 	}
 
 	async disconnect() {
-		await this.leaveWorld();
 		await this.connection.stop();
 		console.log("[WorldClient] Disconnected");
 	}

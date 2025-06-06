@@ -29,5 +29,4 @@ export interface WorldStore {
 
 export interface BlockStore {
 	blockRegistry: BlockRegistry | null;
-	extractBlockId: (blockId: number) => number;
 }

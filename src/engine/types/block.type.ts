@@ -1,4 +1,5 @@
 import { Color3, Color4, Scene, TransformNode, Vector3, Vector4 } from "@babylonjs/core";
+import { BlockMaterialManager } from "@engine/renderer/BlockMaterialManager.ts";
 
 export type Color = Color3 | Color4;
 
@@ -64,7 +65,11 @@ export interface CrossRender extends BaseRender, ColorGetter {
 export interface ModelRender {
 	type: "model";
 	uvs?: Vector4[];
-	loadModel: (scene: Scene, position: Vector3) => Promise<TransformNode>;
+	loadModel: (
+		scene: Scene,
+		matManager: BlockMaterialManager,
+		position: Vector3
+	) => Promise<TransformNode>;
 }
 
 export type RenderComponent = CubeRender | CrossRender | ModelRender;

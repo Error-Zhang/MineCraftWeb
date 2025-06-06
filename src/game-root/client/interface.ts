@@ -14,6 +14,8 @@ export interface IPlayerMoveData {
 	x: number;
 	y: number;
 	z: number;
+	yaw: number;
+	pitch: number;
 }
 
 export interface IBlockActionData {
