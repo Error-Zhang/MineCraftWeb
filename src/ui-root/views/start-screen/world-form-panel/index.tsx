@@ -12,9 +12,9 @@ import {
 	publicOptions,
 	seasonOptions,
 	worldModeOptions,
-} from "./constant";
+} from "./constant.ts";
 import { IWorld } from "@/ui-root/api/interface.ts";
-import { worldApi } from "../../../../api";
+import { worldApi } from "../../../api";
 
 interface WorldFormPanelProps {
 	world?: IWorld;

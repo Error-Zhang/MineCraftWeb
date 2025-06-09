@@ -8,14 +8,16 @@ import Bag from "@/ui-root/views/bag";
 
 const GameUI: React.FC<{ canvasRef: RefObject<HTMLCanvasElement> }> = ({ canvasRef }) => {
 	const [startGame, setStartGame] = useState(false);
+	const [loading, setLoading] = useState(true);
 	useEffect(() => {
 		useGameStore.subscribe(state => {
 			setStartGame(state.isGaming);
+			setLoading(state.isLoading);
 		});
-	}, []);
+	}, [setStartGame, setLoading]);
 	return (
 		<GameUIWrapper canvasRef={canvasRef}>
-			{startGame && (
+			{startGame && !loading && (
 				<div>
 					<Hotbar />
 					<Catalog />

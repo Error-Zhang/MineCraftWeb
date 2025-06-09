@@ -1,4 +1,4 @@
-import "../index.less";
+import "./index.less";
 
 const DroneOverlayGrid = () => {
 	const totalCells = 10 * 6;

@@ -29,7 +29,7 @@ export const TAG_GETTERS: {
 	[TAGS.NATURE.LEAVES]: {
 		cube: {
 			getColor(value) {
-				return getFoliageColor(value, 1);
+				return getFoliageColor(value);
 			},
 		},
 	},

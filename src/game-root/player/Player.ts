@@ -44,7 +44,6 @@ export class Player {
 		this.showBlockHoverOutline();
 
 		this.debugHelper = new DebugHelper(scene);
-		this.debugHelper.createAxisHelper();
 	}
 
 	private get worldController() {
@@ -133,10 +132,9 @@ export class Player {
 	}
 
 	private showBlockHoverOutline() {
-		let highlightBox: Mesh | null = null;
-
 		// 创建高亮盒子（只创建一次）
-		highlightBox = MeshBuilder.CreateBox("hoverBox", { size: 1 }, this.scene);
+		let highlightBox: Mesh = MeshBuilder.CreateBox("hoverBox", { size: 1 }, this.scene);
+		highlightBox.renderingGroupId = 1;
 		const mat = new StandardMaterial("outlineMat", this.scene);
 		mat.emissiveColor = new Color3(1, 1, 1); // 白色发光
 

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import "./index.less";
-import { userApi } from "../../../../api";
+import { userApi } from "../../../api";
 import { useUserStore } from "@/store";
 
 interface AuthModalProps {

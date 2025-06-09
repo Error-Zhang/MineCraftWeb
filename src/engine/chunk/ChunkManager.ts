@@ -1,9 +1,10 @@
 import { WorldRenderer } from "../renderer/WorldRenderer";
 import { Chunk } from "./Chunk";
-import { BlockEntity } from "@engine/types/block.type.ts";
-import { SingleClass } from "@engine/core/Singleton.ts";
-import { Coords } from "@engine/types/chunk.type.ts";
-import { EdgeConfigs } from "@engine/renderer/ChunkMeshBuilder.ts";
+import { BlockEntity } from "../types/block.type.ts";
+import { SingleClass } from "../core/Singleton.ts";
+import { Coords } from "../types/chunk.type.ts";
+import { EdgeConfigs } from "../renderer/Constant.ts";
+import { BlockRegistry } from "../block/BlockRegistry.ts";
 
 // requestIdleCallback 兼容封装
 const runIdle =
@@ -13,42 +14,47 @@ const runIdle =
 				setTimeout(() => cb({ timeRemaining: () => 16, didTimeout: false } as any), 1);
 
 export class ChunkManager extends SingleClass {
-	public static ChunkSize: number = 16;
-	public static ChunkHeight: number = 128;
 	// 半径(单位区块)
 	public static ViewDistance = 4;
-	public static LoadDistance = this.ViewDistance;
-	public static UnloadDistance = this.LoadDistance + 2;
-	// 半径(单位方块)
-	public static MinUpdateDistance = this.ChunkSize;
-
+	private _use: boolean = false;
 	// 实例部分
 	private chunks = new Map<string, Chunk>();
 	private readonly generator: (coords: Coords) => Promise<Chunk[]>;
 	private readonly worldRenderer: WorldRenderer;
 	private unloadCallbacks: Array<(chunk: Chunk) => void> = [];
 	private loadCallbacks: Array<(chunk: Chunk) => void> = [];
-	private updatedCallbacks: Array<() => void> = [];
+	private updatedCallbacks: Array<(progress: number) => void> = [];
 	private isUpdating: boolean = false;
 	private unloadTimer: number | null = null;
 	private chunksToUnload: Map<string, number> = new Map(); // 存储区块key和标记时间戳
-	private readonly UNLOAD_DELAY = 1000 * 60; // 60秒后卸载
+	private readonly UNLOAD_DELAY = 1000 * 30; // 60秒后卸载
 	private readonly POLLING_TIME = 1000 * 30; // 每分检查一次
 
 	constructor(generator: (coords: Coords) => Promise<Chunk[]>) {
 		super();
+		this._use = true;
 		this.generator = generator;
 		this.worldRenderer = WorldRenderer.getInstance();
-		this.onChunkLoad(chunk => {
-			this.worldRenderer.buildChunk(chunk);
-		});
 		this.onChunkUnload(chunk => {
 			this.worldRenderer.unloadChunk(chunk.Key);
 		});
 	}
 
+	public static get LoadDistance() {
+		return this.ViewDistance;
+	}
+
+	public static get UnloadDistance() {
+		return this.LoadDistance + 1;
+	}
+
 	public static override get Instance(): ChunkManager {
 		return this.getInstance();
+	}
+
+	// 半径(单位方块)
+	public static get MinUpdateDistance() {
+		return Chunk.Size;
 	}
 
 	// 静态方法：全局访问区块方块数据
@@ -56,18 +62,26 @@ export class ChunkManager extends SingleClass {
 		return this.Instance.getBlock(x, y, z);
 	}
 
-	public static setBlockAt(
+	public static async setBlockAt(
 		x: number,
 		y: number,
 		z: number,
 		blockId: number,
 		isModel = false
-	): void {
+	) {
 		if (isModel) {
-			this.Instance.setModelBlock(x, y, z, blockId);
+			await this.Instance.setModelBlock(x, y, z, blockId);
 		} else {
-			this.Instance.setBlock(x, y, z, blockId);
+			await this.Instance.setBlock(x, y, z, blockId);
 		}
+	}
+
+	public static getBlockInfo(x: number, y: number, z: number) {
+		let blockValue = ChunkManager.getBlockAt(x, y, z);
+		let envValue = ChunkManager.Instance.getEnvironment(x, z);
+		let id = BlockRegistry.Instance.decodeId?.(blockValue) ?? blockValue;
+		let def = BlockRegistry.Instance.getById(id)!;
+		return [blockValue, id, def, envValue] as const;
 	}
 
 	public getEnvironment(x: number, z: number) {
@@ -99,7 +113,7 @@ export class ChunkManager extends SingleClass {
 				// 卸载超出范围的区块
 				for (const key of this.chunks.keys()) {
 					const [cx, cz] = key.split(",").map(Number);
-					const dist = this.getChunkDistance(cx, cz, chunkX, chunkZ);
+					const dist = this.getChunkApproxDistance(cx, cz, chunkX, chunkZ);
 					const chunk = this.getChunk(cx, cz)!;
 					chunk.isVisible = dist <= ChunkManager.ViewDistance;
 					if (dist > ChunkManager.UnloadDistance * 1.5) {
@@ -115,8 +129,9 @@ export class ChunkManager extends SingleClass {
 				const coordsToLoad: Coords = [];
 				for (let cz = minZ; cz <= maxZ; cz++) {
 					for (let cx = minX; cx <= maxX; cx++) {
+						const dist = this.getChunkApproxDistance(cx, cz, chunkX, chunkZ);
 						const key = this.chunkKey(cx, cz);
-						if (!this.chunks.has(key)) {
+						if (dist <= ChunkManager.ViewDistance && !this.chunks.has(key)) {
 							coordsToLoad.push({ x: cx, z: cz });
 						}
 					}
@@ -134,36 +149,39 @@ export class ChunkManager extends SingleClass {
 
 				// 按距离排序
 				chunks.sort((a, b) => {
-					const distA = this.getChunkCenterDistance(a.position.x, a.position.z, chunkX, chunkZ);
-					const distB = this.getChunkCenterDistance(b.position.x, b.position.z, chunkX, chunkZ);
+					const distA = this.getChunkApproxDistance(a.position.x, a.position.z, chunkX, chunkZ);
+					const distB = this.getChunkApproxDistance(b.position.x, b.position.z, chunkX, chunkZ);
 					return distA - distB;
 				});
 
 				await new Promise<void>(resolve => {
 					let currentIndex = 0;
+					const maxPerFrame = 1;
 
-					// 如果不等待idle全部完成就进行下次渲染会产生一些不可预测的行为 比如:重叠面
-					const processChunksIdle = () => {
-						runIdle(deadline => {
-							while (deadline.timeRemaining() > 0 && currentIndex < chunks.length) {
-								const chunk = chunks[currentIndex++];
-								this.execCallback(chunk, this.loadCallbacks);
-							}
+					const processChunksFrame = async () => {
+						let count = 0;
 
-							if (currentIndex < chunks.length) {
-								runIdle(processChunksIdle);
-							} else {
-								resolve();
-							}
-						});
+						while (currentIndex < chunks.length && count < maxPerFrame) {
+							if (!this._use) return;
+							const chunk = chunks[currentIndex++];
+							await this.worldRenderer.buildChunks(chunk);
+							this.execUpdated(currentIndex / (chunks.length - 1));
+							count++;
+						}
+
+						if (currentIndex < chunks.length) {
+							if (!this._use) return;
+							requestAnimationFrame(processChunksFrame);
+						} else {
+							resolve();
+						}
 					};
 
-					processChunksIdle();
+					requestAnimationFrame(processChunksFrame);
 				});
 			} catch (error) {
 				console.error("[VoxelEngine] Error updating chunks:", error);
 			} finally {
-				this.updatedCallbacks.forEach(callback => callback());
 				this.updateChunkEdges();
 				const end = performance.now();
 				console.log(`[VoxelEngine] 区块更新完成，处理耗时: ${(end - start).toFixed(2)} ms`);
@@ -171,8 +189,13 @@ export class ChunkManager extends SingleClass {
 		});
 	}
 
-	public onUpdated(callback: () => void) {
+	public onUpdated(callback: (progress: number) => void) {
 		this.updatedCallbacks.push(callback);
+		return this.updatedCallbacks.length - 1;
+	}
+
+	public offUpdated(id: number) {
+		this.updatedCallbacks.splice(id, 1);
 	}
 
 	public getChunk(chunkX: number, chunkZ: number) {
@@ -180,10 +203,10 @@ export class ChunkManager extends SingleClass {
 	}
 
 	public worldToChunk(x: number, z: number): [number, number, number, number] {
-		const chunkX = Math.floor(x / ChunkManager.ChunkSize);
-		const chunkZ = Math.floor(z / ChunkManager.ChunkSize);
-		const localX = x - chunkX * ChunkManager.ChunkSize;
-		const localZ = z - chunkZ * ChunkManager.ChunkSize;
+		const chunkX = Math.floor(x / Chunk.Size);
+		const chunkZ = Math.floor(z / Chunk.Size);
+		const localX = x - chunkX * Chunk.Size;
+		const localZ = z - chunkZ * Chunk.Size;
 		return [chunkX, chunkZ, localX, localZ];
 	}
 
@@ -193,16 +216,25 @@ export class ChunkManager extends SingleClass {
 		return chunk?.getBlock(localX, y, localZ) ?? -1;
 	}
 
-	public setBlock(x: number, y: number, z: number, blockId: number) {
+	public async setBlock(x: number, y: number, z: number, blockId: number) {
 		const [chunkX, chunkZ, localX, localZ] = this.worldToChunk(x, z);
 		const chunk = this.getChunk(chunkX, chunkZ);
 		if (chunk) {
 			chunk.setBlock(localX, y, localZ, blockId);
-			this.worldRenderer.updateChunks({ x, y, z });
+			await this.worldRenderer.updateChunks({ x, y, z });
 		}
 	}
 
-	public setModelBlock(x: number, y: number, z: number, blockId: number) {
+	public async setBlocks(blocks: { x: number; y: number; z: number; blockId: number }[]) {
+		blocks.forEach(block => {
+			const [chunkX, chunkZ, localX, localZ] = this.worldToChunk(block.x, block.z);
+			const chunk = this.getChunk(chunkX, chunkZ);
+			chunk?.setBlock(localX, block.y, localZ, block.blockId);
+		});
+		await this.worldRenderer.updateChunks(blocks);
+	}
+
+	public async setModelBlock(x: number, y: number, z: number, blockId: number) {
 		const [chunkX, chunkZ, localX, localZ] = this.worldToChunk(x, z);
 		const chunk = this.getChunk(chunkX, chunkZ);
 		if (chunk) {
@@ -210,7 +242,7 @@ export class ChunkManager extends SingleClass {
 			const renderer = this.worldRenderer.getRenderer(chunk.Key)!;
 			let key = `${x},${y},${z}`;
 			if (blockId !== 0) {
-				renderer.addModelBlock(key, blockId);
+				await renderer.addModelBlock(key, blockId);
 			} else {
 				renderer.removeModelBlock(key);
 			}
@@ -281,7 +313,7 @@ export class ChunkManager extends SingleClass {
 		const chunk = this.getChunk(chunkX, chunkZ);
 		if (!chunk) return 0;
 
-		for (let y = ChunkManager.ChunkHeight - 1; y > 0; y--) {
+		for (let y = Chunk.Height - 1; y > 0; y--) {
 			const blockId = chunk.getBlock(localX, y, localZ);
 			if (blockId !== 0) {
 				return y + 1;
@@ -291,6 +323,7 @@ export class ChunkManager extends SingleClass {
 	}
 
 	dispose(): void {
+		this._use = false;
 		clearInterval(this.unloadTimer!);
 		this.chunks.clear();
 	}
@@ -299,8 +332,8 @@ export class ChunkManager extends SingleClass {
 	 * 计算区块中心点的世界坐标
 	 */
 	public getChunkCenter(chunkX: number, chunkZ: number): [number, number] {
-		const centerX = chunkX * ChunkManager.ChunkSize + ChunkManager.ChunkSize / 2;
-		const centerZ = chunkZ * ChunkManager.ChunkSize + ChunkManager.ChunkSize / 2;
+		const centerX = chunkX * Chunk.Size + Chunk.Size / 2;
+		const centerZ = chunkZ * Chunk.Size + Chunk.Size / 2;
 		return [centerX, centerZ];
 	}
 
@@ -318,7 +351,7 @@ export class ChunkManager extends SingleClass {
 
 		const dx = chunkCenterX - worldCenterX;
 		const dz = chunkCenterZ - worldCenterZ;
-		return Math.max(Math.abs(dx), Math.abs(dz)) / ChunkManager.ChunkSize;
+		return Math.max(Math.abs(dx), Math.abs(dz)) / Chunk.Size;
 	}
 
 	public getChunkCenterDistance(
@@ -332,7 +365,34 @@ export class ChunkManager extends SingleClass {
 
 		const dx = chunkCenterX - worldCenterX;
 		const dz = chunkCenterZ - worldCenterZ;
-		return Math.sqrt(dx * dx + dz * dz) / ChunkManager.ChunkSize;
+		return Math.sqrt(dx * dx + dz * dz) / Chunk.Size;
+	}
+
+	public getChunkApproxDistance(
+		chunkX: number,
+		chunkZ: number,
+		worldChunkX: number,
+		worldChunkZ: number
+	): number {
+		// 中心点计算
+		const [chunkCenterX, chunkCenterZ] = this.getChunkCenter(chunkX, chunkZ);
+		const [worldCenterX, worldCenterZ] = this.getChunkCenter(worldChunkX, worldChunkZ);
+
+		// dx, dz 是“中心差”
+		const dx = chunkCenterX - worldCenterX;
+		const dz = chunkCenterZ - worldCenterZ;
+
+		// 减去半边长（以 Chunk 为半径）
+		const half = Chunk.Size / 2;
+
+		// 计算实际离玩家最短距离
+		const nx = Math.max(0, Math.abs(dx) - half);
+		const nz = Math.max(0, Math.abs(dz) - half);
+		return Math.sqrt(nx * nx + nz * nz) / Chunk.Size;
+	}
+
+	private execUpdated(progress: number) {
+		this.updatedCallbacks.forEach(callback => callback(progress));
 	}
 
 	// 异步锁

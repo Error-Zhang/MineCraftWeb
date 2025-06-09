@@ -4,21 +4,58 @@ import { Scene } from "@babylonjs/core";
 import { Position } from "@engine/types/chunk.type.ts";
 import { Chunk } from "../chunk/Chunk";
 import { SingleClass } from "@engine/core/Singleton.ts";
+import { MeshBuilderContext } from "@engine/types/mesh.type.ts";
+import { ChunkMeshBuilder } from "@engine/renderer/ChunkMeshBuilder.ts";
+
+export type MeshBuilderFun = (
+	chunkPos: { x: number; z: number },
+	edges: Set<number>,
+	filter: Set<string>
+) => Promise<MeshBuilderContext>;
+
+const buildMeshByMainThread = async (
+	chunkPos: { x: number; z: number },
+	edges: Set<number>,
+	filter: Set<string>
+) => {
+	const context: MeshBuilderContext = {
+		mergeGroups: new Map(),
+		renderedBlocks: new Set(),
+		modelBlocks: new Map(),
+		chunkPos,
+		filter,
+		edges,
+		width: Chunk.Size,
+		height: Chunk.Height,
+		getBlockAt: ChunkManager.getBlockInfo.bind(ChunkManager),
+	};
+	return ChunkMeshBuilder.build(context);
+};
 
 export class WorldRenderer extends SingleClass {
+	public buildMesh: MeshBuilderFun;
 	private renderers: Map<string, ChunkRenderer> = new Map();
 
 	constructor(private scene: Scene) {
 		super();
+		this.buildMesh = buildMeshByMainThread;
+	}
+
+	public static get Instance(): WorldRenderer {
+		return this.getInstance();
+	}
+
+	public registerBuildMeshFun(buildMesh: MeshBuilderFun) {
+		this.buildMesh = buildMesh;
 	}
 
 	/**
 	 * 更新区块中某一部分时调用
 	 * @param positions
 	 */
-	public updateChunks(positions: Position[] | Position) {
+	public async updateChunks(positions: Position[] | Position) {
 		const allAffectedChunks = new Map<string, Position[]>();
-		const chunkSize = ChunkManager.ChunkSize;
+		const chunkSize = Chunk.Size;
 
 		for (const pos of Array.isArray(positions) ? positions : [positions]) {
 			const cx = Math.floor(pos.x / chunkSize);
@@ -27,7 +64,6 @@ export class WorldRenderer extends SingleClass {
 
 			if (!allAffectedChunks.has(key)) allAffectedChunks.set(key, []);
 			allAffectedChunks.get(key)!.push(pos);
-
 			// 只有破坏地形才会影响其他区块
 			if (ChunkManager.getBlockAt(pos.x, pos.y, pos.z) !== 0) continue;
 
@@ -69,20 +105,7 @@ export class WorldRenderer extends SingleClass {
 
 			const renderer = this.renderers.get(key);
 			if (!renderer) continue;
-
-			// 获取当前区块的基准坐标
-			const [cx, cz] = key.split(",").map(Number);
-			const baseX = cx * chunkSize;
-			const baseZ = cz * chunkSize;
-
-			// 转换为区块内坐标
-			const localPositions = worldPositions.map(pos => ({
-				x: pos.x - baseX,
-				y: pos.y,
-				z: pos.z - baseZ,
-			}));
-
-			renderer.update(localPositions);
+			await renderer.update(worldPositions);
 		}
 	}
 
@@ -95,17 +118,17 @@ export class WorldRenderer extends SingleClass {
 		renderer?.setEnabled(chunk.isVisible);
 	}
 
-	public rebuildChunk(chunk: Chunk) {
+	public async rebuildChunk(chunk: Chunk) {
 		const renderer = this.renderers.get(chunk.Key)!;
-		renderer.build();
+		await renderer.buildChunk();
 	}
 
-	public buildChunk(chunk: Chunk) {
+	public async buildChunks(chunk: Chunk) {
 		if (chunk.isVisible) {
 			if (!this.renderers.has(chunk.Key)) {
-				this.createChunkRenderer(chunk);
+				await this.createChunkRenderer(chunk);
 			} else if (chunk.edges.size) {
-				this.rebuildChunk(chunk);
+				await this.rebuildChunk(chunk);
 			}
 		}
 		this.setChunkVisibility(chunk);
@@ -124,10 +147,10 @@ export class WorldRenderer extends SingleClass {
 		this.renderers.clear();
 	}
 
-	private createChunkRenderer(chunk: Chunk): ChunkRenderer {
+	private async createChunkRenderer(chunk: Chunk) {
 		const renderer = new ChunkRenderer(this.scene, chunk);
 		this.renderers.set(chunk.Key, renderer);
-		renderer.build();
+		await renderer.buildChunk();
 		return renderer;
 	}
 }

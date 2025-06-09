@@ -6,7 +6,7 @@ import GameSelect from "@/ui-root/components/game-select";
 import exitIcon from "@/ui-root/assets/icons/exit.svg";
 import { useUserStore } from "@/store";
 import { IPlayer } from "@/ui-root/api/interface.ts";
-import { playerApi } from "../../../../api";
+import { playerApi } from "../../../api";
 
 interface WorldPlayersPanelProps {
 	worldId: number;

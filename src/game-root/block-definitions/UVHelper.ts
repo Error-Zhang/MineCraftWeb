@@ -4,7 +4,7 @@ class UVHelper {
 	constructor(
 		private readonly tilesX = 16,
 		private readonly tilesY = 16,
-		private readonly padding = 0.001
+		private readonly padding = 0.0001
 	) {}
 
 	/**

@@ -5,8 +5,9 @@ import { TagID, TagManager } from "./TagManager";
 type TMeta = Record<string, unknown>;
 
 export class BlockRegistry extends SingleClass {
+	public static decodeId?: (value: number) => number;
+	public blocks: BlockDefinition<TMeta>[] = [];
 	public readonly tagManager: TagManager;
-	private blocks: BlockDefinition<TMeta>[] = [];
 	private nameToIdMap = new Map<string, number>();
 	private nextId = 1;
 	private namespaceToIdMap = new Map<string, Set<number>>();
@@ -15,10 +16,18 @@ export class BlockRegistry extends SingleClass {
 	constructor(public decodeId?: (value: number) => number) {
 		super();
 		this.tagManager = new TagManager();
+		BlockRegistry.decodeId = decodeId;
 	}
 
 	public static override get Instance(): BlockRegistry {
 		return this.getInstance();
+	}
+
+	public static getById(blocks: BlockDefinition<TMeta>[], id: number) {
+		if (id === 0 || id === -1) return null;
+		const definition = blocks[id];
+		if (!definition) throw new Error(`Block ${id} not found`);
+		return blocks[id];
 	}
 
 	public registerBlock(block: BlockDefinition<TMeta>, namespace?: string) {
@@ -34,7 +43,7 @@ export class BlockRegistry extends SingleClass {
 		const blockNamespace = namespace || this.getNamespace(block.blockType);
 
 		// 注册方块
-		this.blocks[block.id] = block;
+		this.setBlock(block.id, block);
 		this.nameToIdMap.set(this.getFullName(block.blockType), block.id);
 
 		// 添加到命名空间映射
@@ -63,10 +72,7 @@ export class BlockRegistry extends SingleClass {
 	}
 
 	public getById(id: number) {
-		if (id === 0 || id === -1) return null;
-		const definition = this.blocks[id];
-		if (!definition) throw new Error(`Block ${id} not found`);
-		return this.blocks[id];
+		return BlockRegistry.getById(this.blocks, id);
 	}
 
 	public getByName(name: string) {
@@ -101,6 +107,10 @@ export class BlockRegistry extends SingleClass {
 	public getTagsForBlock(name: string) {
 		const id = this.nameToIdMap.get(name);
 		return this.getById(id!)?.tags || [];
+	}
+
+	private setBlock(id: number, def: BlockDefinition<TMeta>) {
+		this.blocks[id] = def;
 	}
 
 	private getFullName(name: string) {

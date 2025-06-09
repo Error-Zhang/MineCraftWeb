@@ -10,6 +10,8 @@ export interface IPlayer {
 	sex: number;
 	createdAt: string;
 	user?: IUser;
+	userId: number;
+	worldId: number;
 }
 
 export interface IWorld {

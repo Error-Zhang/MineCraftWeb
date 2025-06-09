@@ -1,4 +1,5 @@
 import { Color3 } from "@babylonjs/core";
+import { useWorldStore } from "@/store";
 
 // 预设草地颜色（春夏秋冬）
 const GRASS_COLORS: Readonly<Color3[]> = [
@@ -9,7 +10,8 @@ const GRASS_COLORS: Readonly<Color3[]> = [
 ];
 
 // 快速返回草地颜色（无计算）
-export function getGrassColor(season: number): Color3 {
+export function getGrassColor(): Color3 {
+	let season: number = useWorldStore.getState().season;
 	return GRASS_COLORS[season & 3]; // 等价于 season % 4，性能更好
 }
 
@@ -43,7 +45,8 @@ for (let season = 0; season < 4; season++) {
 }
 
 // 快速返回扰动后的颜色（只索引，不计算）
-export function getFoliageColor(value: number, season: number): Color3 {
+export function getFoliageColor(value: number): Color3 {
+	let season: number = useWorldStore.getState().season;
 	const s = season & 3;
 	const v = value & (VARIANTS - 1); // 快速模 VARIANTS（假设 VARIANTS 为 2 的幂）
 	return foliageCache[s][v];

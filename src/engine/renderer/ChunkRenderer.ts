@@ -1,55 +1,91 @@
-import { Material, Mesh, Scene, TransformNode, Vector3, VertexData } from "@babylonjs/core";
+import {
+	Animation,
+	Material,
+	Mesh,
+	PBRMaterial,
+	Scene,
+	StandardMaterial,
+	TransformNode,
+	Vector3,
+	VertexData,
+} from "@babylonjs/core";
 import { Chunk } from "../chunk/Chunk";
 import { BlockRegistry } from "../block/BlockRegistry";
-import { ChunkMeshBuilder, FaceDirectionOffset } from "./ChunkMeshBuilder";
 import { BlockMaterialManager } from "../renderer/BlockMaterialManager.ts";
 import { ModelRender } from "../types/block.type.ts";
 import { Position } from "../types/chunk.type.ts";
-import { ChunkManager } from "../chunk/ChunkManager.ts";
 import { Environment } from "../environment/Environment.ts";
+import { FaceDirectionOffset } from "./Constant.ts";
+import { WorldRenderer } from "@engine/renderer/WorldRenderer.ts";
+import { ChunkMeshBuilder } from "@engine/renderer/ChunkMeshBuilder.ts";
 
 export class ChunkRenderer {
 	private root: TransformNode;
 	private modelInstances: Map<string, TransformNode> = new Map();
-	private renderedBlocks: Set<string> = new Set(); // 区块内部坐标
+	private renderedBlocks: Set<string> = new Set();
 
 	constructor(
 		public scene: Scene,
 		public chunk: Chunk
 	) {
-		this.root = new TransformNode(`chunk-${chunk.position.x},${chunk.position.z}`, scene);
-		this.root.position.set(
-			chunk.position.x * ChunkManager.ChunkSize,
-			0,
-			chunk.position.z * ChunkManager.ChunkSize
-		);
+		this.root = this.createRoot();
 	}
 
-	public update(positions: Position[]) {
+	// 传入绝对坐标
+	public async update(positions: Position[]) {
 		const toUpdate = this.renderedBlocks;
+
 		for (const pos of positions) {
 			toUpdate.add(`${pos.x},${pos.y},${pos.z}`);
-
+			// 这里必须验证是否在当前区块内，否则会出现多出渲染的面在边界处
 			for (const [dx, dy, dz] of FaceDirectionOffset) {
-				const nk = `${pos.x + dx},${pos.y + dy},${pos.z + dz}`;
-				toUpdate.add(nk);
+				if (Chunk.isInBounds(this.chunk, pos.x + dx, pos.y + dy, pos.z + dz)) {
+					const nk = `${pos.x + dx},${pos.y + dy},${pos.z + dz}`;
+					toUpdate.add(nk);
+				}
 			}
 		}
-		this.build(toUpdate);
+		await this.buildChunk(toUpdate);
 	}
 
-	public build(filter: Set<string> = this.renderedBlocks) {
-		this.root.dispose();
-		const { meshGroups, modelBlocks, renderedBlocks } = ChunkMeshBuilder.build(this.chunk, filter);
+	public async buildChunk(filter: Set<string> = this.renderedBlocks) {
+		const { mergeGroups, modelBlocks, renderedBlocks } = await WorldRenderer.Instance.buildMesh(
+			this.chunk.position,
+			this.chunk.edges,
+			filter
+		);
 		this.renderedBlocks = renderedBlocks;
-		// 创建网格
-		for (const [matKey, vertexData] of Object.entries(meshGroups)) {
-			const material = BlockMaterialManager.Instance.getMaterialByKey(matKey);
-			const mesh = this.createMesh(matKey, vertexData, material);
-			this.scene.addMesh(mesh);
+
+		const meshGroups = ChunkMeshBuilder.createMeshGroups(mergeGroups);
+
+		// 双缓冲处理：新 root 替代旧 root，避免空白闪烁
+		const oldRoot = this.root;
+		const newRoot = this.createRoot();
+		this.root = newRoot;
+
+		for (const matKey in meshGroups) {
+			const vertexData = meshGroups[matKey];
+			const material = this.cloneMaterialForMesh(
+				BlockMaterialManager.Instance.getMaterialByKey(matKey)
+			);
+			const mesh = this.createMesh(matKey, vertexData, material, newRoot);
+			if (!filter.size) {
+				if (!(material as StandardMaterial).alphaCutOff && material.alpha === 1) {
+					material.alpha = 0;
+					this.fadeInMaterial(material);
+				}
+			}
 		}
 
-		this.buildModelBlocks(modelBlocks);
+		await this.buildModelBlocks(modelBlocks);
+
+		// 延迟一帧后销毁旧 root，防止闪屏
+		requestAnimationFrame(() => {
+			oldRoot.getChildren().forEach(child => {
+				Environment.Instance.shadowGenerator?.removeShadowCaster(child as Mesh);
+			});
+			oldRoot.dispose();
+		});
 	}
 
 	// bugfix:如果你在某天发现本应该被销毁的网格回到了世界原点，那一定是dispose出了问题
@@ -86,6 +122,7 @@ export class ChunkRenderer {
 			Environment.Instance.shadowGenerator?.addShadowCaster(child);
 		});
 		this.modelInstances.set(posKey, model);
+		this.renderedBlocks.add(posKey);
 	}
 
 	public removeModelBlock(posKey: string) {
@@ -93,7 +130,46 @@ export class ChunkRenderer {
 		this.modelInstances.delete(posKey);
 	}
 
-	private createMesh(name: string, vertexData: VertexData, material: Material): Mesh {
+	private createRoot() {
+		const newRoot = new TransformNode(
+			`chunk-${this.chunk.position.x},${this.chunk.position.z}`,
+			this.scene
+		);
+		newRoot.position.set(this.chunk.position.x * Chunk.Size, 0, this.chunk.position.z * Chunk.Size);
+		return newRoot;
+	}
+
+	private fadeInMaterial(material: Material, duration: number = 1000) {
+		const anim = new Animation(
+			"fadeInMaterial",
+			"alpha",
+			60,
+			Animation.ANIMATIONTYPE_FLOAT,
+			Animation.ANIMATIONLOOPMODE_CONSTANT
+		);
+
+		const keys = [
+			{ frame: 0, value: 0 },
+			{ frame: (60 * duration) / 1000, value: 1 },
+		];
+		anim.setKeys(keys);
+		material.animations = [anim];
+		this.scene.beginAnimation(material, 0, (60 * duration) / 1000, false);
+	}
+
+	private cloneMaterialForMesh(baseMaterial: Material): Material {
+		if (baseMaterial instanceof StandardMaterial || baseMaterial instanceof PBRMaterial) {
+			return baseMaterial.clone(baseMaterial.name + "_clone")!;
+		}
+		return baseMaterial;
+	}
+
+	private createMesh(
+		name: string,
+		vertexData: VertexData,
+		material: Material,
+		root: TransformNode
+	): Mesh {
 		const mesh = new Mesh(name, this.scene);
 		vertexData.applyToMesh(mesh);
 		mesh.material = material;
@@ -110,7 +186,7 @@ export class ChunkRenderer {
 		// 分租渲染确保在环境渲染之后，否则会被影响
 		mesh.renderingGroupId = 1;
 		Environment.Instance.shadowGenerator?.addShadowCaster(mesh);
-		mesh.setParent(this.root);
+		mesh.setParent(root);
 		return mesh;
 	}
 

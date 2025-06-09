@@ -49,8 +49,12 @@ export class WorldController {
 		this.chunkManager.onChunkUnload(callback);
 	}
 
-	onChunkUpdated(callback: () => void) {
-		this.chunkManager.onUpdated(callback);
+	onChunkUpdated(callback: (progress: number) => void) {
+		return this.chunkManager.onUpdated(callback);
+	}
+
+	offChunkUpdated(id: number) {
+		this.chunkManager.offUpdated(id);
 	}
 
 	/**
@@ -64,11 +68,20 @@ export class WorldController {
 	/**
 	 * 设置指定位置的方块ID
 	 */
-	setBlock(position: Position, blockId: number) {
+	async setBlock(position: Position, blockId: number) {
 		const isModel =
 			BlockRegistry.Instance.getById(blockId)?.render?.type === "model" ||
 			this.getBlock(position)?.render?.type === "model";
 		// 设置方块
-		ChunkManager.setBlockAt(position.x, position.y, position.z, blockId, isModel);
+		await ChunkManager.setBlockAt(position.x, position.y, position.z, blockId, isModel);
+	}
+
+	async setBlocks(blocks: { x: number; y: number; z: number; blockId: number }[]) {
+		if (blocks.length === 1) {
+			const { x, y, z, blockId } = blocks[0];
+			await this.setBlock({ x, y, z }, blockId);
+			return;
+		}
+		await ChunkManager.Instance.setBlocks(blocks);
 	}
 }

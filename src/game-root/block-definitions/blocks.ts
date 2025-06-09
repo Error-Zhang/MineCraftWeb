@@ -7,6 +7,7 @@ import { TAGS } from "@/game-root/block-definitions/BlockTags.ts";
 import { BlockCoder } from "@/game-root/block-definitions/BlockCoder.ts";
 import { getGrassColor } from "@/game-root/block-definitions/ColorHelper.ts";
 import { Color3 } from "@babylonjs/core";
+import { IBlockReflect } from "@/ui-root/api/interface.ts";
 
 // 方块定义
 export const blocks: BlockDefinition<Record<string, any>>[] = [
@@ -22,7 +23,7 @@ export const blocks: BlockDefinition<Record<string, any>>[] = [
 		.withCubeGetters({
 			getColor(value, face, envValue) {
 				if (face === 4) {
-					return getGrassColor(1);
+					return getGrassColor();
 				}
 			},
 		})
@@ -110,9 +111,7 @@ export const blocks: BlockDefinition<Record<string, any>>[] = [
 		})
 		.withCrossGetters({
 			getColor(_, __, envValue) {
-				const temperature = BlockCoder.extractTemperature(envValue!);
-				const humidity = BlockCoder.extractHumidity(envValue!);
-				return getGrassColor(1);
+				return getGrassColor();
 			},
 		})
 		.asCross()
@@ -523,7 +522,7 @@ export const blocks: BlockDefinition<Record<string, any>>[] = [
 		.build(),
 ];
 
-export const getBlocksMap = () =>
+const getBlocksMap = () =>
 	blocks.reduce(
 		(acc, cur) => {
 			acc[cur.blockType] = cur;
@@ -531,3 +530,16 @@ export const getBlocksMap = () =>
 		},
 		{} as Record<string, BlockDefinition<any>>
 	);
+export const getCombinedBlocks = (blockTypes: IBlockReflect) => {
+	const blocksMap = getBlocksMap();
+	Object.entries(blockTypes.byName).forEach(([blockType, blockId]) => {
+		if (blockId === 0) return;
+		if (!blocksMap[blockType]) {
+			throw new Error(`Block ${blockType} was not defined in website.`);
+		}
+	});
+	return blocks.map(block => ({
+		...block,
+		id: blockTypes.byName[block.blockType] ?? block.id,
+	}));
+};

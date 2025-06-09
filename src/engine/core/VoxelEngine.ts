@@ -7,7 +7,7 @@ import {
 	BlockTextureManager,
 	MaterialConfig,
 } from "../renderer/BlockMaterialManager.ts";
-import { WorldRenderer } from "../renderer/WorldRenderer";
+import { MeshBuilderFun, WorldRenderer } from "../renderer/WorldRenderer";
 import { waterFragmentShader, waterVertexShader } from "../shaders/water";
 import { lavaFragmentShader, lavaVertexShader } from "../shaders/lava";
 import { Chunk } from "../chunk/Chunk.ts";
@@ -144,9 +144,9 @@ export class VoxelEngine {
 			viewDistance?: number;
 		} = {}
 	) {
-		chunkSize && (ChunkManager.ChunkSize = chunkSize);
-		chunkHeight && (ChunkManager.ChunkHeight = chunkHeight);
-		viewDistance && (ChunkManager.LoadDistance = viewDistance);
+		chunkSize && (Chunk.Size = chunkSize);
+		chunkHeight && (Chunk.Height = chunkHeight);
+		viewDistance && (ChunkManager.ViewDistance = viewDistance);
 		this.chunkManager = Singleton.create(ChunkManager, chunkGenerator);
 		this._worldContext.add(this.chunkManager);
 		this.onUpdate(() => {
@@ -156,6 +156,10 @@ export class VoxelEngine {
 		});
 		console.log("[VoxelEngine] 区块注册完成");
 		return new WorldController(this.chunkManager, this.environment!);
+	}
+
+	public registerMeshBuilder(meshBuilderFun: MeshBuilderFun) {
+		this.worldRenderer?.registerBuildMeshFun(meshBuilderFun);
 	}
 
 	private resizeListener = () => this.engine.resize();

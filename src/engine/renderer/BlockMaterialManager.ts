@@ -9,7 +9,7 @@ import {
 	Texture,
 } from "@babylonjs/core";
 import { Color } from "../types/block.type.ts";
-import { SingleClass } from "@engine/core/Singleton.ts";
+import { SingleClass } from "../core/Singleton.ts";
 
 /** 材质文档
  * https://doc.babylonjs.com/features/featuresDeepDive/materials/using/pbrMaterials
@@ -41,7 +41,7 @@ interface MaterialCreationConfig {
 	color: Color;
 	/** 自发光颜色，使材质在暗处也能发光 */
 	emissive: Color3;
-	/** 金属度，影响材质的金属感，0-1之间，值越大金属感越强 */
+	/** 金属度，影响材质的金属感，0-1之间，值越大金属感越强（控制镜面反射，必须与环境贴图搭配使用，否则值越大反而越暗） */
 	metallic: number;
 	/** 粗糙度，影响材质的反光程度，0-1之间，值越大越粗糙 */
 	roughness: number;
@@ -155,10 +155,10 @@ export class BlockMaterialManager extends SingleClass {
 	static initializePresetMaterials() {
 		// 固体方块材质
 		this.registerMaterialPreset(this.PRESET_MATERIALS.SOLID, {
-			materialType: "pbr",
 			alpha: 1,
 			backFaceCulling: true,
-			roughness: 0.8,
+			roughness: 1,
+			metallic: 0,
 		});
 
 		// 金属材质
@@ -299,7 +299,7 @@ export class BlockMaterialManager extends SingleClass {
 			color = new Color3(1, 1, 1),
 			emissive = new Color3(0, 0, 0),
 			metallic = 0,
-			roughness = 0.5,
+			roughness = 1,
 			textureKey,
 			alpha = 1,
 			backFaceCulling = true,
@@ -476,11 +476,9 @@ export class BlockMaterialManager extends SingleClass {
 		pbrMaterial.alpha = config.alpha;
 		pbrMaterial.alphaCutOff = config.alphaCutOff;
 		pbrMaterial.emissiveColor = config.emissive;
-		pbrMaterial.roughness = config.roughness;
-		pbrMaterial.metallic = config.metallic;
+		pbrMaterial.roughness = config.roughness; // 镜面反射
+		pbrMaterial.metallic = config.metallic; // 控制反射
 		pbrMaterial.backFaceCulling = config.backFaceCulling;
-		pbrMaterial.environmentIntensity = config.environmentIntensity;
-		pbrMaterial.usePhysicalLightFalloff = config.usePhysicalLightFalloff;
 
 		return pbrMaterial;
 	}

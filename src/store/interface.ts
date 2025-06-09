@@ -1,5 +1,6 @@
 import { WorldController } from "@engine/core/WorldController.ts";
 import { BlockRegistry } from "@engine/block/BlockRegistry.ts";
+import { IBlockReflect } from "@/ui-root/api/interface.ts";
 
 export interface UserStore {
 	userId: number;
@@ -11,6 +12,7 @@ export interface GameStore {
 	isGaming: boolean;
 	gameMode: number;
 	isSplitting: boolean;
+	isLoading: boolean;
 }
 
 export interface PlayerStore {
@@ -23,10 +25,13 @@ export interface PlayerStore {
 
 export interface WorldStore {
 	worldId: number;
+	worldHost: string;
+	season: number;
 	worldController: WorldController | null;
 	reset: () => void;
 }
 
 export interface BlockStore {
 	blockRegistry: BlockRegistry | null;
+	blockTypes: IBlockReflect | null;
 }

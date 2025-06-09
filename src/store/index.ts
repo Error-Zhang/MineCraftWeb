@@ -20,6 +20,7 @@ export const useGameStore = create<GameStore>(set => ({
 	gameMode: 0,
 	isGaming: false,
 	isSplitting: false,
+	isLoading: true,
 }));
 
 export const usePlayerStore = create<PlayerStore>((set, get) => ({
@@ -32,10 +33,13 @@ export const usePlayerStore = create<PlayerStore>((set, get) => ({
 
 export const useWorldStore = create<WorldStore>(set => ({
 	worldId: 0,
+	worldHost: "",
+	season: 0,
 	worldController: null,
 	reset: () => set({ worldId: 0, worldController: null }),
 }));
 
 export const useBlockStore = create<BlockStore>((set, get) => ({
 	blockRegistry: null,
+	blockTypes: null,
 }));

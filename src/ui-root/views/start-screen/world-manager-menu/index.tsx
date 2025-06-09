@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import "./index.less";
 import { ScreenPage } from "@/ui-root/views/start-screen";
-import GameDialog from "../../../../components/game-dialog";
+import GameDialog from "../../../components/game-dialog";
 import GameButton from "@/ui-root/components/game-button";
 import WorldFormPanel from "../world-form-panel";
 import deleteIcon from "@/ui-root/assets/icons/delete.svg";
@@ -14,13 +14,13 @@ import {
 	seasonOptions,
 	worldModeOptions,
 	worldViewOptions,
-} from "@/ui-root/views/start-screen/components/world-form-panel/constant.ts";
-import WorldPlayerPanel from "@/ui-root/views/start-screen/components/world-player-panel";
+} from "@/ui-root/views/start-screen/world-form-panel/constant.ts";
+import WorldPlayerPanel from "@/ui-root/views/start-screen/world-player-panel";
 
 import GameSelect from "@/ui-root/components/game-select";
 import { IWorld } from "@/ui-root/api/interface.ts";
 import { useGameStore, usePlayerStore, useUserStore, useWorldStore } from "@/store";
-import { playerApi, worldApi } from "../../../../api";
+import { playerApi, worldApi } from "../../../api";
 
 const WorldManagerMenu: React.FC<{ setPage: (page: ScreenPage) => void }> = ({ setPage }) => {
 	const [worldList, setWorldList] = useState<IWorld[]>([]);
@@ -68,6 +68,8 @@ const WorldManagerMenu: React.FC<{ setPage: (page: ScreenPage) => void }> = ({ s
 			const player = await playerApi.getPlayer(world.id!);
 			useWorldStore.setState({
 				worldId: world.id!,
+				worldHost: world.user?.userName,
+				season: world.season,
 			});
 			usePlayerStore.setState({
 				playerId: player.id,
@@ -76,6 +78,7 @@ const WorldManagerMenu: React.FC<{ setPage: (page: ScreenPage) => void }> = ({ s
 				isGaming: true,
 				gameMode: world.gameMode,
 			});
+			setShowPlayerPanel(false);
 		} else {
 			setSelectedWorld(world);
 			setShowPlayerPanel(true);

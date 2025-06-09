@@ -1,10 +1,10 @@
 import React, { useState } from "react";
-import "../index.less";
+import "./index.less";
 import titleIcon from "@/ui-root/assets/gui/Title.webp";
 import webIcon from "@/ui-root/assets/gui/Web.webp";
 import GameButton from "@/ui-root/components/game-button";
 import AuthModal from "./auth-modal";
-import { ScreenPage } from "@/ui-root/views/start-screen";
+import { ScreenPage } from "@/ui-root/views/start-screen/index.tsx";
 import { useUserStore } from "@/store";
 
 const MainMenu: React.FC<{ setPage: (page: ScreenPage) => void }> = ({ setPage }) => {
