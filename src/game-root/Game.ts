@@ -24,6 +24,8 @@ import * as Comlink from "comlink";
 import { IVertexBuilder, IVertexBuilderConstructor } from "@/game-root/worker/interface.ts";
 import MathUtils from "@/game-root/utils/MathUtils.ts";
 import { BlockPlacement } from "@/game-root/managers/BlockPlacement.ts";
+import { BlockIconGenerator } from "@engine/block-icon/BlockIconGenerator.ts";
+import { BlockDefinition } from "@engine/types/block.type.ts";
 
 export class Game {
 	public canvas: HTMLCanvasElement;
@@ -34,12 +36,16 @@ export class Game {
 	private npcPlayers = new Map<number, NpcPlayer>();
 	private worker?: Worker;
 	private vertexBuilder?: Comlink.Remote<IVertexBuilder>;
+	private screen?: LoadingScreen;
+	private readonly textures = [{ key: "blocks", path: Assets.blocks.atlas }];
 
 	constructor(canvas: HTMLCanvasElement) {
 		this.canvas = canvas;
 		GameWindow.create(canvas);
 		this.voxelEngine = new VoxelEngine(canvas);
-		this.registerBlocks();
+		this.registerBlocks().then(blockRegistry => {
+			this.generateBlockIcons(blockRegistry.getAllBlocks());
+		});
 		this.voxelEngine.onUpdate(() => PlayerInputSystem.Instance.update(), false);
 	}
 
@@ -60,13 +66,9 @@ export class Game {
 	}
 
 	public async start() {
-		this.scene = this.voxelEngine.createScene();
+		this.scene = await this.voxelEngine.createScene();
 		this.attachFPSDisplay();
-
-		this.voxelEngine.registerTexturesAndMaterials(this.scene, [
-			{ key: "blocks", path: Assets.blocks.atlas },
-		]);
-
+		this.voxelEngine.registerTexturesAndMaterials(this.scene, this.textures);
 		const { chunkSetting, players } = await this.gameClient.joinWorld(
 			this.worldStore.worldId,
 			this.playerStore.playerId
@@ -109,6 +111,27 @@ export class Game {
 	public destroy() {
 		this.dispose();
 		GameWindow.Instance.dispose();
+	}
+
+	private async generateBlockIcons(blocks: BlockDefinition<any>[]) {
+		let count = await BlockIconGenerator.getBlockIconCount();
+		if (count === blocks.length) {
+			if (!this.gameStore.isInitialized) {
+				useGameStore.setState({ isInitialized: true });
+			}
+			return;
+		}
+		const blockIconGenerator = new BlockIconGenerator(this.textures);
+		for await (const { block, index, total } of blockIconGenerator.generateIconsWithProgress(
+			blocks
+		)) {
+			this.screen?.updateIconText(
+				`正在生成图标：${index + 1} / ${total}，当前方块：${block.metaData.displayName}`
+			);
+			if (index + 1 === total) {
+				useGameStore.setState({ isInitialized: true });
+			}
+		}
 	}
 
 	private async initWorker(setting: IChunkSetting) {
@@ -159,7 +182,9 @@ export class Game {
 	private setupEvents(world: WorldController) {
 		const client = this.gameClient.playerClient;
 		const placer = new BlockPlacement(world, this.vertexBuilder);
-
+		this.voxelEngine.onUpdate(() => {
+			placer.update();
+		});
 		client.onPlayerJoined(id => this.spawnNPC(id));
 		client.onPlayerMove(({ playerId, x, y, z, pitch, yaw }) => {
 			const p = this.npcPlayers.get(playerId);
@@ -214,7 +239,12 @@ export class Game {
 
 	private showLoadingScreen(worldController: WorldController) {
 		const screen = new LoadingScreen(this.scene);
-		let start = false;
+		const enterToWorld = () => {
+			useGameStore.setState({ isLoading: false });
+			screen.dispose();
+			worldController.offChunkUpdated(id);
+			this.voxelEngine.start(this.scene);
+		};
 		const id = worldController.onChunkUpdated(progress => {
 			screen.update({
 				worldName: this.worldStore.worldHost,
@@ -224,14 +254,18 @@ export class Game {
 			});
 			this.scene.render();
 			if (progress === 1) {
-				setTimeout(() => {
-					useGameStore.setState({ isLoading: false });
-					screen.dispose();
-					worldController.offChunkUpdated(id);
-					this.voxelEngine.start(this.scene);
-				}, 200);
+				if (this.gameStore.isInitialized) {
+					enterToWorld();
+				} else {
+					useGameStore.subscribe(state => {
+						if (state.isInitialized) {
+							enterToWorld();
+						}
+					});
+				}
 			}
 		});
+		this.screen = screen;
 	}
 
 	private async registerBlocks() {
@@ -239,5 +273,6 @@ export class Game {
 		const merged = getCombinedBlocks(types);
 		const registry = VoxelEngine.registerBlocks(merged, BlockCoder.extractId.bind(BlockCoder));
 		useBlockStore.setState({ blockRegistry: registry, blockTypes: types });
+		return registry;
 	}
 }

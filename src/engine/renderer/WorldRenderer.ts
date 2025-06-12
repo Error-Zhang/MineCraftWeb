@@ -113,7 +113,7 @@ export class WorldRenderer extends SingleClass {
 		return this.renderers.get(key);
 	}
 
-	public setChunkVisibility(chunk: Chunk) {
+	public setChunkEnabled(chunk: Chunk) {
 		const renderer = this.getRenderer(chunk.Key);
 		renderer?.setEnabled(chunk.isVisible);
 	}
@@ -123,7 +123,7 @@ export class WorldRenderer extends SingleClass {
 		await renderer.buildChunk();
 	}
 
-	public async buildChunks(chunk: Chunk) {
+	public async buildChunk(chunk: Chunk) {
 		if (chunk.isVisible) {
 			if (!this.renderers.has(chunk.Key)) {
 				await this.createChunkRenderer(chunk);
@@ -131,7 +131,7 @@ export class WorldRenderer extends SingleClass {
 				await this.rebuildChunk(chunk);
 			}
 		}
-		this.setChunkVisibility(chunk);
+		this.setChunkEnabled(chunk);
 	}
 
 	public unloadChunk(key: string) {

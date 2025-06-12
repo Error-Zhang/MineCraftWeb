@@ -21,6 +21,7 @@ export class LoadingScreen {
 		秋季: "#FF7043", // Autumn orange
 		冬季: "#42A5F5", // Winter blue
 	};
+	private iconProgressText: TextBlock;
 
 	constructor(scene: Scene) {
 		this.guiTexture = AdvancedDynamicTexture.CreateFullscreenUI("LoadingScreen", true, scene);
@@ -74,6 +75,14 @@ export class LoadingScreen {
 		this.timeText.paddingRight = "0px";
 		infoGrid.addControl(this.timeText, 0, 1);
 
+		// 当前图标生成进度文字
+		this.iconProgressText = new TextBlock();
+		this.iconProgressText.color = "#CCCCCC";
+		this.iconProgressText.fontSize = 16;
+		this.iconProgressText.height = "30px";
+		this.iconProgressText.textHorizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
+		stackPanel.addControl(this.iconProgressText);
+
 		// 进度方块
 		this.createProgressBlocks(stackPanel);
 	}
@@ -121,6 +130,10 @@ export class LoadingScreen {
 				block.background = "#333333";
 			}
 		});
+	}
+
+	public updateIconText(text: string) {
+		this.iconProgressText.text = text;
 	}
 
 	private adjustColorBrightness(hex: string, factor: number): string {

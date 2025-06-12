@@ -31,6 +31,7 @@ const StartScreen: React.FC<{ hidden: boolean }> = ({ hidden }) => {
 		let needsUserInteraction = false;
 
 		const loadMusic = async () => {
+			return;
 			const modules = import.meta.glob("/src/ui-root/assets/musics/*.mp3", {
 				eager: true,
 			}) as Record<string, { default: string }>;

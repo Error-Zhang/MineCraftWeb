@@ -93,11 +93,6 @@ export class BlockTextureManager extends SingleClass {
 	registerTextures(textures: { key: string; path: string }[]) {
 		for (const { path, key } of textures) {
 			if (!this.textureCache.has(path)) {
-				/**
-				 * 3：是否禁用mipmap(通过生成不同分辨率的图像来实现近处清晰远处模糊，进而优化性能)
-				 * 4：反转纹理的 Y(V) 轴方向, 改成从左上角开始，或者使用texture.vScale = -1;
-				 * 5：采样方法：最近点采样（nearest）NEAREST_NEAREST 或 NEAREST_NEAREST_MIPNEAREST (开启mipMap使用)直接精确采样像素防止模糊（mc首选）
-				 */
 				let texture = new Texture(
 					path,
 					this.scene,
@@ -106,7 +101,6 @@ export class BlockTextureManager extends SingleClass {
 					Texture.NEAREST_NEAREST_MIPNEAREST
 				);
 				texture.hasAlpha = true;
-
 				this.textureCache.set(key, texture);
 			}
 		}
@@ -135,16 +129,22 @@ export class BlockMaterialManager extends SingleClass {
 		GLASS: "glass",
 		CROSS: "cross",
 		MODEL: "model",
+		MODEL_COLLIDER: "model_collider",
 		METAL: "metal",
 	} as const;
 	private static materialPresets: Map<string, MaterialConfig> = new Map();
 	private materialCache: Map<string, Material> = new Map();
+	private blockTextureManager: BlockTextureManager;
 
-	constructor(public scene: Scene) {
+	constructor(
+		public scene: Scene,
+		blockTextureManager?: BlockTextureManager
+	) {
 		super();
 		if (!BlockMaterialManager.materialPresets.size) {
 			BlockMaterialManager.initializePresetMaterials();
 		}
+		this.blockTextureManager = blockTextureManager ?? BlockTextureManager.getInstance();
 	}
 
 	public static get Instance(): BlockMaterialManager {
@@ -166,7 +166,7 @@ export class BlockMaterialManager extends SingleClass {
 			alpha: 1,
 			backFaceCulling: true,
 			roughness: 0.2,
-			environmentIntensity: 1,
+			metallic: 1.0,
 			emissive: new Color3(0.01, 0.01, 0.01),
 		});
 
@@ -174,33 +174,20 @@ export class BlockMaterialManager extends SingleClass {
 		this.registerMaterialPreset(this.PRESET_MATERIALS.MODEL, {
 			alpha: 1,
 			backFaceCulling: true,
-			roughness: 0.5,
+			roughness: 1,
 			alphaCutOff: 0.5,
 		});
 
-		// 水材质
+		// 模型碰撞体材质
+		this.registerMaterialPreset(this.PRESET_MATERIALS.MODEL_COLLIDER, {
+			alpha: 0,
+		});
+
+		// 水材质 - 使用PBR材质模拟
 		this.registerMaterialPreset(this.PRESET_MATERIALS.WATER, {
+			alpha: 0.6,
 			backFaceCulling: true,
-			shader: {
-				vertex: "water",
-				fragment: "water",
-				uniforms: ["waveHeight", "waveSpeed", "waterColor", "alpha", "time"],
-				customUniforms: {
-					waveHeight: 0.1,
-					waveSpeed: 1.0,
-					waterColor: [0.4, 0.8, 0.8],
-					alpha: 0.6,
-					time: 0,
-				},
-				needAnimation: true,
-				onAnimationUpdate: (() => {
-					let materialTime = 0;
-					return (material: ShaderMaterial, deltaTime: number) => {
-						materialTime += deltaTime;
-						material.setFloat("time", materialTime);
-					};
-				})(),
-			},
+			emissive: new Color3(0.4, 0.8, 0.8),
 			meshProperties: {
 				alphaIndex: 1,
 				isPickable: false,
@@ -251,6 +238,7 @@ export class BlockMaterialManager extends SingleClass {
 			alphaCutOff: 0.5,
 			backFaceCulling: false,
 			roughness: 0.1,
+			metallic: 0.9,
 			meshProperties: {
 				checkCollisions: true,
 			},
@@ -399,9 +387,7 @@ export class BlockMaterialManager extends SingleClass {
 
 		// 设置纹理
 		if (config.textureKey) {
-			const texture = BlockTextureManager.getInstance<BlockTextureManager>().getTexture(
-				config.textureKey
-			);
+			const texture = this.blockTextureManager.getTexture(config.textureKey);
 			shaderMaterial.setTexture("diffuseSampler", texture);
 		}
 
@@ -447,38 +433,36 @@ export class BlockMaterialManager extends SingleClass {
 	}
 
 	// 创建标准材质
-	private createStandardMaterial(config: MaterialCreationConfig): Material {
+	private createStandardMaterial(config: MaterialConfig): Material {
 		const standardMaterial = new StandardMaterial("standardMaterial", this.scene);
-		const texture = BlockTextureManager.getInstance<BlockTextureManager>().getTexture(
-			config.textureKey
-		);
+		const texture = this.blockTextureManager.getTexture(config.textureKey);
 
 		standardMaterial.diffuseTexture = texture;
-		standardMaterial.alpha = config.alpha;
-		standardMaterial.alphaCutOff = config.alphaCutOff;
+		standardMaterial.alpha = config.alpha ?? 1;
+		standardMaterial.alphaCutOff = config.alphaCutOff ?? 0;
 		standardMaterial.separateCullingPass = true;
-		standardMaterial.emissiveColor = config.emissive;
-		standardMaterial.specularColor = config.specular;
-		standardMaterial.roughness = config.roughness;
-		standardMaterial.backFaceCulling = config.backFaceCulling;
+		standardMaterial.emissiveColor = config.emissive ?? new Color3(0, 0, 0);
+		standardMaterial.specularColor = config.specular ?? new Color3(0, 0, 0);
+		standardMaterial.roughness = config.roughness ?? 1;
+		standardMaterial.backFaceCulling = config.backFaceCulling ?? true;
 
 		return standardMaterial;
 	}
 
 	// 创建PBR材质
-	private createPBRMaterial(config: MaterialCreationConfig): Material {
+	private createPBRMaterial(config: MaterialConfig): Material {
 		const pbrMaterial = new PBRMaterial("pbrMaterial", this.scene);
-		const texture = BlockTextureManager.getInstance<BlockTextureManager>().getTexture(
-			config.textureKey
-		);
+		const texture = this.blockTextureManager.getTexture(config.textureKey);
 
 		pbrMaterial.albedoTexture = texture;
-		pbrMaterial.alpha = config.alpha;
-		pbrMaterial.alphaCutOff = config.alphaCutOff;
-		pbrMaterial.emissiveColor = config.emissive;
-		pbrMaterial.roughness = config.roughness; // 镜面反射
-		pbrMaterial.metallic = config.metallic; // 控制反射
-		pbrMaterial.backFaceCulling = config.backFaceCulling;
+		pbrMaterial.alpha = config.alpha ?? 1;
+		pbrMaterial.alphaCutOff = config.alphaCutOff ?? 0;
+		pbrMaterial.emissiveColor = config.emissive ?? new Color3(0, 0, 0);
+		pbrMaterial.roughness = config.roughness ?? 1;
+		pbrMaterial.metallic = config.metallic ?? 0;
+		pbrMaterial.backFaceCulling = config.backFaceCulling ?? true;
+		pbrMaterial.environmentIntensity = config.environmentIntensity ?? 1;
+		pbrMaterial.usePhysicalLightFalloff = config.usePhysicalLightFalloff ?? false;
 
 		return pbrMaterial;
 	}

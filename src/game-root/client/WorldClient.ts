@@ -22,7 +22,7 @@ export class WorldClient {
 		console.log("[WorldClient] Disconnected");
 	}
 
-	async setBlock(block: IBlockActionData) {
+	async setBlock(block: IBlockActionData[]) {
 		await this.connection.invoke<ApiResponse<any>>("SetBlock", block);
 	}
 

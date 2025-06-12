@@ -2,11 +2,10 @@ import React, { useEffect, useState } from "react";
 import "./index.less";
 import { Nullable } from "@babylonjs/core";
 import { HandSlotController } from "@/ui-root/components/slot/HandSlotManager.tsx";
-import BlockType from "@/game-root/block-definitions/BlockType.ts";
 
 export type SlotType = Nullable<{
 	id: number;
-	key: BlockType;
+	key: string;
 	displayName: string;
 	value: number;
 	icon?: string;
@@ -84,7 +83,6 @@ const Slot: React.FC<SlotProps> = ({
 			}
 		}
 	};
-
 	return (
 		<div
 			title={slot?.displayName || ""}
@@ -93,11 +91,17 @@ const Slot: React.FC<SlotProps> = ({
 			onClick={handleClick}
 			onContextMenu={handleRightClick} // 加上右键处理
 		>
-			{slot && !imgError ? (
-				<img className="slot-icon" onError={() => setImgError(true)} alt="" />
-			) : (
-				slot && <span className="slot-fallback-text">{slot.displayName}</span>
-			)}
+			{slot &&
+				(!imgError ? (
+					<img
+						className="slot-icon"
+						src={slot.icon || ""}
+						onError={() => setImgError(true)}
+						alt=""
+					/>
+				) : (
+					<span className="slot-fallback-text">{slot.displayName}</span>
+				))}
 			{showCount && slot && slot.value > 1 && <span className="slot-number">{slot.value}</span>}
 		</div>
 	);

@@ -32,9 +32,7 @@ export class PlayerClient {
 		await this.connection.invoke("PlayerMove", data);
 	}
 
-	async sendPlaceBlock(position: { x: number; y: number; z: number }, blockId: number) {
-		const { x, y, z } = position;
-		let data: IBlockActionData = { x, y, z, blockId }; // 不要使用剩余参数赋值，如果传入的是Vector会出错
+	async sendPlaceBlock(data: IBlockActionData[]) {
 		await this.worldClient.setBlock(data);
 		await this.connection.invoke("PlaceBlock", data);
 	}
@@ -43,7 +41,7 @@ export class PlayerClient {
 		this.safeOn("PlayerMove", callback);
 	}
 
-	onPlaceBlock(callback: (data: IBlockActionData) => void) {
+	onPlaceBlock(callback: (data: IBlockActionData[]) => void) {
 		this.safeOn("PlaceBlock", callback);
 	}
 

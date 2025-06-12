@@ -1,11 +1,11 @@
 import { BlockDefinition } from "../types/block.type";
 import { SingleClass } from "../core/Singleton.ts";
 import { TagID, TagManager } from "./TagManager";
+import { BlockIconStore } from "@engine/block-icon/store.ts";
 
 type TMeta = Record<string, unknown>;
 
 export class BlockRegistry extends SingleClass {
-	public static decodeId?: (value: number) => number;
 	public blocks: BlockDefinition<TMeta>[] = [];
 	public readonly tagManager: TagManager;
 	private nameToIdMap = new Map<string, number>();
@@ -16,18 +16,30 @@ export class BlockRegistry extends SingleClass {
 	constructor(public decodeId?: (value: number) => number) {
 		super();
 		this.tagManager = new TagManager();
-		BlockRegistry.decodeId = decodeId;
+		if (decodeId) {
+			BlockRegistry.decodeId = decodeId;
+		}
 	}
 
 	public static override get Instance(): BlockRegistry {
 		return this.getInstance();
 	}
 
+	public static decodeId: (value: number) => number = value => value;
+
 	public static getById(blocks: BlockDefinition<TMeta>[], id: number) {
 		if (id === 0 || id === -1) return null;
 		const definition = blocks[id];
 		if (!definition) throw new Error(`Block ${id} not found`);
 		return blocks[id];
+	}
+
+	public async getBlockIcons() {
+		return BlockIconStore.getIconUrls(Array.from(this.nameToIdMap.keys()));
+	}
+
+	public decodeGetById(value: number) {
+		return this.getById(this.decodeId?.(value) ?? value);
 	}
 
 	public registerBlock(block: BlockDefinition<TMeta>, namespace?: string) {
@@ -109,12 +121,12 @@ export class BlockRegistry extends SingleClass {
 		return this.getById(id!)?.tags || [];
 	}
 
-	private setBlock(id: number, def: BlockDefinition<TMeta>) {
-		this.blocks[id] = def;
+	public getFullName(name: string) {
+		return name.includes(":") ? name : `${this.DEFAULT_NAMESPACE}:${name}`;
 	}
 
-	private getFullName(name: string) {
-		return name.includes(":") ? name : `${this.DEFAULT_NAMESPACE}:${name}`;
+	private setBlock(id: number, def: BlockDefinition<TMeta>) {
+		this.blocks[id] = def;
 	}
 
 	private getTagId(tag: string) {

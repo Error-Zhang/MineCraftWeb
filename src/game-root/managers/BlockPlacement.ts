@@ -1,65 +1,64 @@
-type BlockData = { x: number; y: number; z: number; blockId: number };
+import { IBlockActionData } from "@/game-root/client/interface.ts";
+import { WorldController } from "@engine/core/WorldController.ts";
+import { IVertexBuilder } from "@/game-root/worker/interface.ts";
 
 export class BlockPlacement {
-	private queue: Map<string, BlockData> = new Map(); // 用于去重
+	private queueMap = new Map<string, IBlockActionData>();
 	private flushing = false;
 	private lastFlushTime = 0;
-	private readonly flushInterval = 100; // ms
-	private readonly maxPerFlush = 50;
+	private readonly flushInterval = 100;
 
 	constructor(
-		private world: { setBlocks: (blocks: BlockData[]) => Promise<void> },
-		private vertexBuilder?: { setBlock: (...args: any[]) => Promise<void> }
-	) {
-		this.scheduleFlushLoop();
-	}
+		private world: WorldController,
+		private vertexBuilder?: IVertexBuilder
+	) {}
 
-	public enqueuePlacement(data: BlockData) {
-		const key = this.getKey(data);
-		this.queue.set(key, data);
-
-		// 如果隔了足够时间，首个立即响应
-		if (performance.now() - this.lastFlushTime > this.flushInterval && !this.flushing) {
-			this.flushImmediately();
+	public enqueuePlacement(data: IBlockActionData[]) {
+		for (const block of data) {
+			const key = this.getKey(block);
+			this.queueMap.set(key, block); // 以坐标去重
 		}
 	}
 
-	private async flushImmediately() {
+	public async update() {
+		if (
+			this.queueMap.size &&
+			performance.now() - this.lastFlushTime >= this.flushInterval &&
+			!this.flushing
+		) {
+			this.flushing = true;
+			await this.flushQueue();
+			this.flushing = false;
+		}
+	}
+
+	public async flushImmediately() {
+		if (this.flushing) return;
 		this.flushing = true;
 		await this.flushQueue();
 		this.flushing = false;
 	}
 
 	private async flushQueue() {
-		const blocks = Array.from(this.queue.values()).slice(0, this.maxPerFlush);
-		this.queue.clear(); // 可以改成 slice + keep 剩余项（如下优化）
+		if (!this.queueMap.size) return;
 
+		const blocks = Array.from(this.queueMap.values());
+
+		// 提前设置 vertexBuilder
 		if (this.vertexBuilder) {
 			for (const block of blocks) {
 				await this.vertexBuilder.setBlock(block.x, block.y, block.z, block.blockId);
 			}
 		}
-		await this.world.setBlocks(blocks);
+
+		// 通知 world 进行正式更新
+		this.world.setBlocks(blocks);
+
+		this.queueMap.clear();
 		this.lastFlushTime = performance.now();
 	}
 
-	private scheduleFlushLoop() {
-		const tick = async () => {
-			if (
-				this.queue.size &&
-				performance.now() - this.lastFlushTime >= this.flushInterval &&
-				!this.flushing
-			) {
-				this.flushing = true;
-				await this.flushQueue();
-				this.flushing = false;
-			}
-			requestAnimationFrame(tick);
-		};
-		tick();
-	}
-
-	private getKey(data: BlockData): string {
+	private getKey(data: IBlockActionData): string {
 		return `${data.x},${data.y},${data.z}`;
 	}
 }

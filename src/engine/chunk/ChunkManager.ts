@@ -5,6 +5,8 @@ import { SingleClass } from "../core/Singleton.ts";
 import { Coords } from "../types/chunk.type.ts";
 import { EdgeConfigs } from "../renderer/Constant.ts";
 import { BlockRegistry } from "../block/BlockRegistry.ts";
+import { MiniBlockBuilder } from "@engine/renderer/MiniBlockBuilder.ts";
+import { Vector3 } from "@babylonjs/core";
 
 // requestIdleCallback 兼容封装
 const runIdle =
@@ -35,9 +37,6 @@ export class ChunkManager extends SingleClass {
 		this._use = true;
 		this.generator = generator;
 		this.worldRenderer = WorldRenderer.getInstance();
-		this.onChunkUnload(chunk => {
-			this.worldRenderer.unloadChunk(chunk.Key);
-		});
 	}
 
 	public static get LoadDistance() {
@@ -62,18 +61,8 @@ export class ChunkManager extends SingleClass {
 		return this.Instance.getBlock(x, y, z);
 	}
 
-	public static async setBlockAt(
-		x: number,
-		y: number,
-		z: number,
-		blockId: number,
-		isModel = false
-	) {
-		if (isModel) {
-			await this.Instance.setModelBlock(x, y, z, blockId);
-		} else {
-			await this.Instance.setBlock(x, y, z, blockId);
-		}
+	public static async setBlockAt(x: number, y: number, z: number, blockId: number) {
+		this.Instance.setBlock(x, y, z, blockId);
 	}
 
 	public static getBlockInfo(x: number, y: number, z: number) {
@@ -111,19 +100,21 @@ export class ChunkManager extends SingleClass {
 				const maxZ = chunkZ + ChunkManager.LoadDistance;
 
 				// 卸载超出范围的区块
-				for (const key of this.chunks.keys()) {
-					const [cx, cz] = key.split(",").map(Number);
-					const dist = this.getChunkApproxDistance(cx, cz, chunkX, chunkZ);
-					const chunk = this.getChunk(cx, cz)!;
-					chunk.isVisible = dist <= ChunkManager.ViewDistance;
-					if (dist > ChunkManager.UnloadDistance * 1.5) {
-						this.unloadChunk(chunk);
-					} else if (dist > ChunkManager.UnloadDistance) {
-						this.scheduleUnloadChunk(chunk);
-					} else {
-						this.cancelScheduledUnload(chunk);
-					}
-				}
+				this.getSortedChunks(Array.from(this.chunks.values()), chunkX, chunkZ)
+					.reverse()
+					.forEach(chunk => {
+						const { x, z } = chunk.position;
+						const dist = this.getChunkApproxDistance(x, z, chunkX, chunkZ);
+						chunk.isVisible = dist <= ChunkManager.ViewDistance;
+						this.worldRenderer.setChunkEnabled(chunk);
+						if (dist > ChunkManager.UnloadDistance * 1.5) {
+							this.unloadChunk(chunk);
+						} else if (dist > ChunkManager.UnloadDistance) {
+							this.scheduleUnloadChunk(chunk);
+						} else {
+							this.cancelScheduledUnload(chunk);
+						}
+					});
 
 				// 收集需要加载的区块坐标
 				const coordsToLoad: Coords = [];
@@ -145,14 +136,8 @@ export class ChunkManager extends SingleClass {
 					}
 				}
 
-				const chunks = Array.from(this.chunks.values());
-
 				// 按距离排序
-				chunks.sort((a, b) => {
-					const distA = this.getChunkApproxDistance(a.position.x, a.position.z, chunkX, chunkZ);
-					const distB = this.getChunkApproxDistance(b.position.x, b.position.z, chunkX, chunkZ);
-					return distA - distB;
-				});
+				const chunks = this.getSortedChunks(Array.from(this.chunks.values()), chunkX, chunkZ);
 
 				await new Promise<void>(resolve => {
 					let currentIndex = 0;
@@ -164,7 +149,7 @@ export class ChunkManager extends SingleClass {
 						while (currentIndex < chunks.length && count < maxPerFrame) {
 							if (!this._use) return;
 							const chunk = chunks[currentIndex++];
-							await this.worldRenderer.buildChunks(chunk);
+							await this.worldRenderer.buildChunk(chunk);
 							this.execUpdated(currentIndex / (chunks.length - 1));
 							count++;
 						}
@@ -216,37 +201,44 @@ export class ChunkManager extends SingleClass {
 		return chunk?.getBlock(localX, y, localZ) ?? -1;
 	}
 
-	public async setBlock(x: number, y: number, z: number, blockId: number) {
-		const [chunkX, chunkZ, localX, localZ] = this.worldToChunk(x, z);
-		const chunk = this.getChunk(chunkX, chunkZ);
-		if (chunk) {
-			chunk.setBlock(localX, y, localZ, blockId);
-			await this.worldRenderer.updateChunks({ x, y, z });
-		}
-	}
-
-	public async setBlocks(blocks: { x: number; y: number; z: number; blockId: number }[]) {
+	public setBlocks(blocks: { x: number; y: number; z: number; blockId: number }[]) {
+		let flag = false;
 		blocks.forEach(block => {
-			const [chunkX, chunkZ, localX, localZ] = this.worldToChunk(block.x, block.z);
-			const chunk = this.getChunk(chunkX, chunkZ);
-			chunk?.setBlock(localX, block.y, localZ, block.blockId);
+			if (this.setBlock(block.x, block.y, block.z, block.blockId)) {
+				flag = true;
+			}
 		});
-		await this.worldRenderer.updateChunks(blocks);
+		if (flag) this.worldRenderer.updateChunks(blocks);
 	}
 
-	public async setModelBlock(x: number, y: number, z: number, blockId: number) {
+	public setBlock(x: number, y: number, z: number, blockValue: number) {
 		const [chunkX, chunkZ, localX, localZ] = this.worldToChunk(x, z);
-		const chunk = this.getChunk(chunkX, chunkZ);
-		if (chunk) {
-			chunk.setBlock(localX, y, localZ, blockId);
+		const chunk = this.getChunk(chunkX, chunkZ)!;
+		const [oldValue, oldId, oldDef] = ChunkManager.getBlockInfo(x, y, z);
+		if (oldValue === 0 && blockValue === 0) return false;
+		const newBlockDef = BlockRegistry.Instance.decodeGetById(blockValue)!;
+		const position = new Vector3(x, y, z);
+
+		let needRender = false;
+		let isRemove = false;
+		if (oldDef?.render.type === "model" || newBlockDef?.render.type === "model") {
 			const renderer = this.worldRenderer.getRenderer(chunk.Key)!;
 			let key = `${x},${y},${z}`;
-			if (blockId !== 0) {
-				await renderer.addModelBlock(key, blockId);
+			if (blockValue !== 0) {
+				renderer.addModelBlock(key, blockValue);
 			} else {
 				renderer.removeModelBlock(key);
+				isRemove = true;
 			}
+		} else {
+			if (blockValue === 0) isRemove = true;
+			needRender = true;
 		}
+		if (isRemove) {
+			MiniBlockBuilder.Instance.createMesh(position, oldValue, oldDef.render, oldDef.properties);
+		}
+		chunk.setBlock(localX, y, localZ, blockValue);
+		return needRender;
 	}
 
 	public loadChunk(chunkX: number, chunkZ: number) {
@@ -286,8 +278,9 @@ export class ChunkManager extends SingleClass {
 	}
 
 	public unloadChunk(chunk: Chunk) {
-		this.execCallback(chunk, this.unloadCallbacks);
+		this.worldRenderer.unloadChunk(chunk.Key);
 		this.chunks.delete(chunk.Key);
+		this.execCallback(chunk, this.unloadCallbacks);
 	}
 
 	public forEachChunk(callback: (chunk: Chunk) => void) {
@@ -389,6 +382,14 @@ export class ChunkManager extends SingleClass {
 		const nx = Math.max(0, Math.abs(dx) - half);
 		const nz = Math.max(0, Math.abs(dz) - half);
 		return Math.sqrt(nx * nx + nz * nz) / Chunk.Size;
+	}
+
+	private getSortedChunks(chunks: Chunk[], chunkX: number, chunkZ: number): Chunk[] {
+		return chunks.sort((a, b) => {
+			const distA = this.getChunkApproxDistance(a.position.x, a.position.z, chunkX, chunkZ);
+			const distB = this.getChunkApproxDistance(b.position.x, b.position.z, chunkX, chunkZ);
+			return distA - distB;
+		});
 	}
 
 	private execUpdated(progress: number) {

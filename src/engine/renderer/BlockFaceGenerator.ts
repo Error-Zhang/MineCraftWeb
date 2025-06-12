@@ -1,7 +1,13 @@
 import { CrossRender, CubeRender } from "../types/block.type.ts";
 import { MeshBuilderContext, MeshData } from "../types/mesh.type.ts";
 import { Color3, Color4 } from "@babylonjs/core";
-import { AOOffsets, FaceDirectionOffset, FaceMap, FaceVertices } from "./Constant.ts";
+import {
+	AOOffsets,
+	FaceDirectionOffset,
+	FaceMap,
+	FaceVertices,
+	getCrossPositions,
+} from "./Constant.ts";
 
 export class BlockFaceGenerator {
 	public static processBlock(key: string | [number, number, number], context: MeshBuilderContext) {
@@ -200,18 +206,7 @@ export class BlockFaceGenerator {
 			new Color3(1, 1, 1);
 		const baseIndex = data.positions.length / 3;
 
-		const positions = [
-			// plane 1 (/)
-			[x, y + 1, z + 1],
-			[x + 1, y + 1, z],
-			[x + 1, y, z],
-			[x, y, z + 1],
-			// plane 2 (\)
-			[x, y + 1, z],
-			[x + 1, y + 1, z + 1],
-			[x + 1, y, z + 1],
-			[x, y, z],
-		];
+		const positions = getCrossPositions(x, y, z);
 
 		data.positions.push(...positions.flat());
 

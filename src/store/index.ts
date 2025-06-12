@@ -21,6 +21,7 @@ export const useGameStore = create<GameStore>(set => ({
 	isGaming: false,
 	isSplitting: false,
 	isLoading: true,
+	isInitialized: false,
 }));
 
 export const usePlayerStore = create<PlayerStore>((set, get) => ({

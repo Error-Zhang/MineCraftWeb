@@ -1,5 +1,4 @@
-import { Color3, Color4, Scene, TransformNode, Vector3, Vector4 } from "@babylonjs/core";
-import { BlockMaterialManager } from "@engine/renderer/BlockMaterialManager.ts";
+import { Color3, Color4, Material, Scene, TransformNode, Vector3, Vector4 } from "@babylonjs/core";
 
 export type Color = Color3 | Color4;
 
@@ -14,6 +13,7 @@ export interface BlockProperties {
 	isBreakable?: boolean;
 	hardness?: number;
 	material?: RenderMaterial;
+	mass?: number;
 }
 
 export enum TransparencyType {
@@ -65,10 +65,17 @@ export interface CrossRender extends BaseRender, ColorGetter {
 export interface ModelRender {
 	type: "model";
 	uvs?: Vector4[];
+	matKey: string;
+	size: Vector3;
+	miniBlockScale: number;
 	loadModel: (
 		scene: Scene,
-		matManager: BlockMaterialManager,
-		position: Vector3
+		position: Vector3,
+		material: Material,
+		options?: {
+			scale?: number;
+			attachCollider?: boolean;
+		}
 	) => Promise<TransformNode>;
 }
 

@@ -13,6 +13,7 @@ export interface GameStore {
 	gameMode: number;
 	isSplitting: boolean;
 	isLoading: boolean;
+	isInitialized: boolean;
 }
 
 export interface PlayerStore {

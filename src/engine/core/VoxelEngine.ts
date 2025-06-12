@@ -1,4 +1,4 @@
-import { AbstractMesh, Effect, Engine, Scene } from "@babylonjs/core";
+import { AbstractMesh, Effect, Engine, Scene, Vector3 } from "@babylonjs/core";
 import { ChunkManager } from "../chunk/ChunkManager";
 import { BlockRegistry } from "../block/BlockRegistry";
 import { BlockDefinition } from "../types/block.type.ts";
@@ -17,6 +17,9 @@ import { GameTime } from "../systems/GameTime";
 import { Coords } from "@engine/types/chunk.type.ts";
 import { Singleton } from "@engine/core/Singleton.ts";
 import { WorldContext } from "@engine/core/WorldContext.ts";
+import { MiniBlockBuilder } from "@engine/renderer/MiniBlockBuilder.ts";
+import HavokPhysics from "@babylonjs/havok";
+import { HavokPlugin } from "@babylonjs/core/Physics/v2";
 // 注册着色器
 Effect.ShadersStore["waterVertexShader"] = waterVertexShader;
 Effect.ShadersStore["waterFragmentShader"] = waterFragmentShader;
@@ -34,6 +37,8 @@ export class VoxelEngine {
 	private environment?: Environment;
 	private worldRenderer?: WorldRenderer;
 	private chunkManager?: ChunkManager;
+	private miniBlockBuilder?: MiniBlockBuilder;
+	private havokPlugin?: HavokPlugin;
 
 	constructor(canvas: HTMLCanvasElement) {
 		this.engine = new Engine(canvas, true);
@@ -85,9 +90,10 @@ export class VoxelEngine {
 		return disposer;
 	}
 
-	public createScene() {
+	public async createScene() {
 		this.clearCanvas();
 		const scene = new Scene(this.engine);
+		await this.initPhysics(scene);
 		this._worldContext = new WorldContext(scene);
 		this.registerWorldRelative(scene);
 		this.scene = scene;
@@ -121,9 +127,12 @@ export class VoxelEngine {
 			scene
 		);
 		BlockMaterialManager.registerCustomMaterials(materials || []);
+		this.miniBlockBuilder = Singleton.create(MiniBlockBuilder, scene, blockMaterialManager);
 		this._worldContext.add(blockTextureManager);
 		this._worldContext.add(blockMaterialManager);
+		this._worldContext.add(this.miniBlockBuilder);
 		console.log("[VoxelEngine] 纹理材质注册完成");
+
 		return { blockTextureManager, blockMaterialManager };
 	}
 
@@ -160,6 +169,14 @@ export class VoxelEngine {
 
 	public registerMeshBuilder(meshBuilderFun: MeshBuilderFun) {
 		this.worldRenderer?.registerBuildMeshFun(meshBuilderFun);
+	}
+
+	private async initPhysics(scene: Scene) {
+		const havok = await HavokPhysics({
+			locateFile: path => `/havok/${path}`,
+		});
+		this.havokPlugin = new HavokPlugin(true, havok);
+		scene.enablePhysics(new Vector3(0, -9.81, 0), this.havokPlugin);
 	}
 
 	private resizeListener = () => this.engine.resize();

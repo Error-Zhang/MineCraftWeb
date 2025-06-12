@@ -146,3 +146,15 @@ export const AOOffsets: Record<
 	},
 	{} as typeof AOOffsets
 );
+export const getCrossPositions = (x: number, y: number, z: number) => [
+	// plane 1 (/)
+	[x, y + 1, z + 1],
+	[x + 1, y + 1, z],
+	[x + 1, y, z],
+	[x, y, z + 1],
+	// plane 2 (\)
+	[x, y + 1, z],
+	[x + 1, y + 1, z + 1],
+	[x + 1, y, z + 1],
+	[x, y, z],
+];

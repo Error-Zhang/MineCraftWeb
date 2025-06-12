@@ -10,7 +10,7 @@ import {
 	RenderMaterial,
 	TransparencyType,
 } from "@engine/types/block.type.ts";
-import BlockMeshRegistry from "@engine/block/BlockMeshRegistry.ts";
+import ModelBlockManager from "@engine/block/ModelBlockManager.ts";
 import { blocksUvTable } from "@/game-root/block-definitions/TextureAtlas.ts";
 import { BlockMaterialManager } from "@engine/renderer/BlockMaterialManager.ts";
 import { TAG_GETTERS } from "./BlockTags.ts";
@@ -47,25 +47,53 @@ function createCrossRender(
 	};
 }
 
+function calculateModelOffset(
+	currentCenter: Vector3,
+	scale: number = 1,
+	targetCenter: Vector3 = Vector3.Zero()
+): Vector3 {
+	// 计算缩放后的当前中心点
+	const scaledCurrentCenter = new Vector3(
+		currentCenter.x * scale,
+		currentCenter.y * scale,
+		currentCenter.z * scale
+	);
+
+	// 计算需要的偏移量
+	return new Vector3(
+		scaledCurrentCenter.x - targetCenter.x,
+		scaledCurrentCenter.y - targetCenter.y,
+		scaledCurrentCenter.z - targetCenter.z
+	);
+}
+
 function createModelRender(
 	path: string,
+	matKey: string,
 	uvs?: Vector4[],
-	setMesh?: (mesh: AbstractMesh) => void
+	setMesh?: (mesh: AbstractMesh) => void,
+	offset: Vector3 = Vector3.Zero(),
+	size: Vector3 = Vector3.One(),
+	miniBlockScale: number = 0.25
 ): ModelRender {
 	return {
 		type: "model",
 		uvs,
-		loadModel: async (scene, matManager: BlockMaterialManager, position) => {
-			const material = matManager.getMaterialByKey(BlockMaterialManager.PRESET_MATERIALS.MODEL);
-			const defaultSetMesh = (mesh: AbstractMesh) => {
+		matKey,
+		size,
+		miniBlockScale,
+		loadModel: async (scene, position, material, options) => {
+			const setMesh2 = (mesh: AbstractMesh) => {
+				mesh.position.addInPlace(offset);
 				mesh.material = material;
 				mesh.isPickable = false;
+				setMesh?.(mesh);
 			};
-			setMesh = setMesh ?? defaultSetMesh;
-			const node = await BlockMeshRegistry.loadModel(path, scene, setMesh);
-			node.position = position.add(new Vector3(0.5, 0, 0.5));
-			BlockMeshRegistry.attachCollider(scene, node);
-			return node;
+			const model = await ModelBlockManager.loadModel(path, scene, setMesh2, options);
+			model.position = position;
+			model.scaling.scaleInPlace(options?.scale || 1);
+			options?.attachCollider && ModelBlockManager.attachCollider(scene, model, size);
+			return model;
 		},
 	};
 }
@@ -92,6 +120,7 @@ export class BlockBuilder {
 		cubeGetters?: Pick<CubeRender, "getUv" | "getColor" | "getRotation">;
 		crossGetters?: Pick<CrossRender, "getStage" | "getColor">;
 	};
+	private defaultModelOffset = new Vector3(0.5, 0, 0.5);
 
 	constructor(blockType: BlockType, displayName: string, id?: number) {
 		this.block = {
@@ -214,11 +243,21 @@ export class BlockBuilder {
 		return this;
 	}
 
-	asModel(path: string, setMesh?: (mesh: AbstractMesh) => void) {
+	asModel(
+		path: string,
+		setMesh?: (mesh: AbstractMesh) => void,
+		offset?: Vector3,
+		size?: Vector3,
+		miniBlockScale?: number
+	) {
 		this.block.render = createModelRender(
 			path,
+			this.block.options.materialOptions?.matKey || BlockMaterialManager.PRESET_MATERIALS.MODEL,
 			blocksUvTable[this.block.blockType].modelUvs,
-			setMesh
+			setMesh,
+			offset ?? this.defaultModelOffset,
+			size,
+			miniBlockScale
 		);
 		return this;
 	}

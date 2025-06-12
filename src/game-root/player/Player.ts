@@ -19,6 +19,8 @@ import MathUtils from "@/game-root/utils/MathUtils.ts";
 import { useGameStore, usePlayerStore, useWorldStore } from "@/store";
 import { PlayerInputSystem } from "@/game-root/player/PlayerInputSystem.ts";
 import { PlayerModel } from "@/game-root/player/PlayerModel.ts";
+import { IBlockActionData } from "@/game-root/client/interface.ts";
+import { BlockMaterialManager } from "@engine/renderer/BlockMaterialManager.ts";
 
 export class Player {
 	public playerModel?: PlayerModel;
@@ -27,10 +29,7 @@ export class Player {
 	private scene: Scene;
 	private debugHelper: DebugHelper;
 	private maxPlaceDistance = 12; // 最大方块放置距离
-	private placeBlockCallBacks: ((
-		position: { x: number; y: number; z: number },
-		blockId: number
-	) => void)[] = [];
+	private placeBlockCallBacks: ((data: IBlockActionData[]) => void)[] = [];
 
 	constructor(scene: Scene, canvas: HTMLCanvasElement) {
 		this.scene = scene;
@@ -54,6 +53,10 @@ export class Player {
 		return usePlayerStore.getState();
 	}
 
+	private get worldStore() {
+		return useWorldStore.getState();
+	}
+
 	public dispose() {
 		this.camera.dispose();
 	}
@@ -67,9 +70,7 @@ export class Player {
 		this.camera.update(dt);
 	}
 
-	public onPlaceBlock(
-		callback: (position: { x: number; y: number; z: number }, blockId: number) => void
-	) {
+	public onPlaceBlock(callback: (data: IBlockActionData[]) => void) {
 		this.placeBlockCallBacks.push(callback);
 	}
 
@@ -96,7 +97,7 @@ export class Player {
 		if (!faceNormal) return null;
 
 		const pickedPos = pick.pickedPoint!;
-		const currentBlockPos = this.getCurrentBlockPos(pickedPos, faceNormal);
+		const currentBlockPos = this.getCurrentBlockPos(pick?.pickedMesh?.id, pickedPos, faceNormal);
 
 		return { faceNormal, currentBlockPos };
 	}
@@ -117,18 +118,29 @@ export class Player {
 	private placeBlock() {
 		const info = this.getTargetBlockInfo();
 		if (!info) return;
+		let isCross =
+			this.worldStore.worldController?.getBlock(info.currentBlockPos)?.render.type === "cross";
 
-		const placePos = info.currentBlockPos.add(info.faceNormal);
+		const placePos = isCross ? info.currentBlockPos : info.currentBlockPos.add(info.faceNormal);
 		let blockId = this.playerStore.holdBlockId;
 		if (blockId === 0) return;
-		this.placeBlockCallBacks.forEach(callback => callback(placePos, blockId));
+		const { x, y, z } = placePos;
+		this.placeBlockCallBacks.forEach(callback => callback([{ x, y, z, blockId }]));
 	}
 
 	// 销毁方块
 	private destroyBlock() {
 		const info = this.getTargetBlockInfo();
 		if (!info) return;
-		this.placeBlockCallBacks.forEach(callback => callback(info.currentBlockPos, 0));
+		const { x, y, z } = info.currentBlockPos;
+		let blocks: IBlockActionData[] = [{ x, y, z, blockId: 0 }];
+		let isCrossPos = info.currentBlockPos.add(new Vector3(0, 1, 0));
+		let isCross = this.worldStore.worldController?.getBlock(isCrossPos)?.render.type === "cross";
+		if (isCross) {
+			const { x, y, z } = isCrossPos;
+			blocks.push({ x, y, z, blockId: 0 });
+		}
+		this.placeBlockCallBacks.forEach(callback => callback(blocks));
 	}
 
 	private showBlockHoverOutline() {
@@ -154,7 +166,11 @@ export class Player {
 
 				if (pickedPoint && normal) {
 					// 转换为整数网格坐标（向下取整）
-					const currentPos = this.getCurrentBlockPos(pickedPoint, normal);
+					const currentPos = this.getCurrentBlockPos(
+						pickResult?.pickedMesh?.id!,
+						pickedPoint,
+						normal
+					);
 
 					// 将 highlightBox 移动到方块中心位置
 					highlightBox.position.set(currentPos.x + 0.5, currentPos.y + 0.5, currentPos.z + 0.5);
@@ -167,11 +183,22 @@ export class Player {
 	}
 
 	// 计算当前方块位置
-	private getCurrentBlockPos(pickedPos: Vector3, faceNormal: Vector3): Vector3 {
+	private getCurrentBlockPos(
+		meshId: string = "",
+		pickedPoint: Vector3,
+		faceNormal: Vector3
+	): Vector3 {
+		if (meshId === BlockMaterialManager.PRESET_MATERIALS.CROSS) {
+			return new Vector3(
+				Math.floor(pickedPoint.x),
+				Math.floor(pickedPoint.y),
+				Math.floor(pickedPoint.z)
+			);
+		}
 		return new Vector3(
-			MathUtils.correct(pickedPos.x, faceNormal.x),
-			MathUtils.correct(pickedPos.y, faceNormal.y),
-			MathUtils.correct(pickedPos.z, faceNormal.z)
+			MathUtils.correct(pickedPoint.x, faceNormal.x),
+			MathUtils.correct(pickedPoint.y, faceNormal.y),
+			MathUtils.correct(pickedPoint.z, faceNormal.z)
 		);
 	}
 

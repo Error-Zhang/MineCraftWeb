@@ -3,6 +3,8 @@ import {
 	Material,
 	Mesh,
 	PBRMaterial,
+	PhysicsShapeMesh,
+	Quaternion,
 	Scene,
 	StandardMaterial,
 	TransformNode,
@@ -18,11 +20,13 @@ import { Environment } from "../environment/Environment.ts";
 import { FaceDirectionOffset } from "./Constant.ts";
 import { WorldRenderer } from "@engine/renderer/WorldRenderer.ts";
 import { ChunkMeshBuilder } from "@engine/renderer/ChunkMeshBuilder.ts";
+import { PhysicsBody, PhysicsMotionType, PhysicsShapeBox } from "@babylonjs/core/Physics/v2";
 
 export class ChunkRenderer {
 	private root: TransformNode;
 	private modelInstances: Map<string, TransformNode> = new Map();
 	private renderedBlocks: Set<string> = new Set();
+	private _isEnabled: boolean = true;
 
 	constructor(
 		public scene: Scene,
@@ -70,20 +74,21 @@ export class ChunkRenderer {
 			);
 			const mesh = this.createMesh(matKey, vertexData, material, newRoot);
 			if (!filter.size) {
-				if (!(material as StandardMaterial).alphaCutOff && material.alpha === 1) {
-					material.alpha = 0;
-					this.fadeInMaterial(material);
-				}
+				this.fadeAlpha(material, true);
 			}
 		}
 
 		await this.buildModelBlocks(modelBlocks);
 
-		// 延迟一帧后销毁旧 root，防止闪屏
+		oldRoot.getChildren().forEach(child => {
+			Environment.Instance.shadowGenerator?.removeShadowCaster(child as Mesh);
+		});
+		oldRoot.getChildMeshes().forEach(child => {
+			if (child.material?.alpha !== 1) {
+				child.dispose();
+			}
+		});
 		requestAnimationFrame(() => {
-			oldRoot.getChildren().forEach(child => {
-				Environment.Instance.shadowGenerator?.removeShadowCaster(child as Mesh);
-			});
 			oldRoot.dispose();
 		});
 	}
@@ -101,26 +106,52 @@ export class ChunkRenderer {
 	}
 
 	public setEnabled(enabled: boolean) {
-		this.modelInstances.forEach(modelInstance => {
-			modelInstance.setEnabled(enabled);
+		if (this._isEnabled === enabled) return;
+		// root 下所有普通块 mesh 淡入淡出
+		this.root.getChildMeshes().forEach(mesh => {
+			let alpha = mesh.material!.alpha;
+			mesh.setEnabled(true);
+			this.fadeAlpha(mesh.material!, enabled, () => {
+				mesh.setEnabled(enabled);
+				mesh.material!.alpha = alpha;
+			});
 		});
-		this.root.setEnabled(enabled);
+
+		// 模型块淡入淡出
+		this.modelInstances.forEach(modelInstance => {
+			modelInstance.getChildMeshes().forEach(child => {
+				let alpha = child.material!.alpha;
+				child.setEnabled(true);
+				this.fadeAlpha(child.material!, enabled, () => {
+					child.setEnabled(enabled);
+					child.material!.alpha = alpha;
+				});
+			});
+		});
+		this._isEnabled = enabled;
 	}
 
 	public async addModelBlock(posKey: string, blockId: number) {
 		const [x, y, z] = posKey.split(",").map(Number);
 		const def = BlockRegistry.Instance.getById(blockId)!;
 		const render = <ModelRender>def.render;
-		const model = await render.loadModel(
-			this.scene,
-			BlockMaterialManager.Instance,
-			new Vector3(x, y, z)
-		);
+		const mat = BlockMaterialManager.Instance.getMaterialByKey(render.matKey);
+		const model = await render.loadModel(this.scene, new Vector3(x, y, z), mat.clone(mat.name)!, {
+			attachCollider: true,
+		});
 		model.metadata = { blockId };
 		model.getChildMeshes().forEach(child => {
-			child.renderingGroupId = 1;
 			Environment.Instance.shadowGenerator?.addShadowCaster(child);
 		});
+		const body = new PhysicsBody(model, PhysicsMotionType.STATIC, false, this.scene);
+		const shape = new PhysicsShapeBox(
+			render.size.scale(0.5),
+			Quaternion.Identity(),
+			render.size,
+			this.scene
+		);
+		body.shape = shape;
+
 		this.modelInstances.set(posKey, model);
 		this.renderedBlocks.add(posKey);
 	}
@@ -130,18 +161,22 @@ export class ChunkRenderer {
 		this.modelInstances.delete(posKey);
 	}
 
-	private createRoot() {
-		const newRoot = new TransformNode(
-			`chunk-${this.chunk.position.x},${this.chunk.position.z}`,
-			this.scene
-		);
-		newRoot.position.set(this.chunk.position.x * Chunk.Size, 0, this.chunk.position.z * Chunk.Size);
-		return newRoot;
-	}
+	private fadeAlpha(
+		material: Material,
+		fadeIn: boolean,
+		onAnimationEnd?: () => void,
+		duration: number = 500
+	) {
+		if ((material as StandardMaterial).alphaCutOff) {
+			onAnimationEnd?.();
+			return;
+		}
+		const targetAlpha = fadeIn ? material.alpha : 0;
+		const currentAlpha = fadeIn ? 0 : material.alpha;
+		material.alpha = currentAlpha;
 
-	private fadeInMaterial(material: Material, duration: number = 1000) {
 		const anim = new Animation(
-			"fadeInMaterial",
+			"fadeAlpha",
 			"alpha",
 			60,
 			Animation.ANIMATIONTYPE_FLOAT,
@@ -149,12 +184,22 @@ export class ChunkRenderer {
 		);
 
 		const keys = [
-			{ frame: 0, value: 0 },
-			{ frame: (60 * duration) / 1000, value: 1 },
+			{ frame: 0, value: currentAlpha },
+			{ frame: (60 * duration) / 1000, value: targetAlpha },
 		];
 		anim.setKeys(keys);
 		material.animations = [anim];
-		this.scene.beginAnimation(material, 0, (60 * duration) / 1000, false);
+
+		this.scene.beginAnimation(material, 0, (60 * duration) / 1000, false, 1, onAnimationEnd);
+	}
+
+	private createRoot() {
+		const newRoot = new TransformNode(
+			`chunk-${this.chunk.position.x},${this.chunk.position.z}`,
+			this.scene
+		);
+		newRoot.position.set(this.chunk.position.x * Chunk.Size, 0, this.chunk.position.z * Chunk.Size);
+		return newRoot;
 	}
 
 	private cloneMaterialForMesh(baseMaterial: Material): Material {
@@ -183,9 +228,18 @@ export class ChunkRenderer {
 		mesh.receiveShadows = meshProperties.receiveShadows ?? true;
 		mesh.alphaIndex = meshProperties.alphaIndex ?? 0;
 
+		// 添加物理系统
+		if (mesh.checkCollisions) {
+			const body = new PhysicsBody(mesh, PhysicsMotionType.STATIC, false, this.scene);
+			body.shape = new PhysicsShapeMesh(mesh, this.scene);
+		}
+
 		// 分租渲染确保在环境渲染之后，否则会被影响
 		mesh.renderingGroupId = 1;
-		Environment.Instance.shadowGenerator?.addShadowCaster(mesh);
+		if (material.alpha === 1) {
+			Environment.Instance.shadowGenerator?.addShadowCaster(mesh);
+		}
+
 		mesh.setParent(root);
 		return mesh;
 	}
