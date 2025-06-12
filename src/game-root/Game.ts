@@ -165,13 +165,7 @@ export class Game {
 				position: { x: data.x, z: data.z },
 			}));
 			await this.vertexBuilder?.addChunks(chunkDatas);
-			return raw.map(data =>
-				Chunk.fromJSON({
-					blocks: Uint16Array.from(data.cells),
-					shafts: Uint8Array.from(data.shafts),
-					position: { x: data.x, z: data.z },
-				})
-			);
+			return chunkDatas.map(chunkData => Chunk.fromJSON(chunkData));
 		};
 		const isFlat = this.worldStore.worldMode === 2;
 		const generator = isFlat ? worldApi.generateFlatWorld : worldApi.generateChunks;

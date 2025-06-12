@@ -40,8 +40,8 @@ class VertexBuilder implements IVertexBuilder {
 		chunk?.setBlock(localX, y, localZ, blockId);
 	}
 
-	public addChunks(chunksDatas: ChunkData[]) {
-		const chunks = chunksDatas.map(chunkData => Chunk.fromJSON(chunkData));
+	public addChunks(chunkDatas: ChunkData[]) {
+		const chunks = chunkDatas.map(chunkData => Chunk.fromJSON(chunkData));
 		chunks.forEach((chunk: Chunk) => {
 			this._chunks.set(chunk.Key, chunk);
 		});

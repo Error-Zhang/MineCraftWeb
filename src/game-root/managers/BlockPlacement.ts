@@ -41,26 +41,22 @@ export class BlockPlacement {
 	}
 
 	private async flushQueue() {
-		try {
-			if (!this.queueMap.size) return;
+		if (!this.queueMap.size) return;
 
-			const blocks = Array.from(this.queueMap.values());
+		const blocks = Array.from(this.queueMap.values());
 
-			// 提前设置 vertexBuilder
-			if (this.vertexBuilder) {
-				for (const block of blocks) {
-					await this.vertexBuilder.setBlock(block.x, block.y, block.z, block.blockId);
-				}
+		// 提前设置 vertexBuilder
+		if (this.vertexBuilder) {
+			for (const block of blocks) {
+				await this.vertexBuilder.setBlock(block.x, block.y, block.z, block.blockId);
 			}
-
-			// 通知 world 进行正式更新
-			this.world.setBlocks(blocks);
-
-			this.queueMap.clear();
-			this.lastFlushTime = performance.now();
-		} catch (e) {
-			console.error(e);
 		}
+
+		// 通知 world 进行正式更新
+		this.world.setBlocks(blocks);
+
+		this.queueMap.clear();
+		this.lastFlushTime = performance.now();
 	}
 
 	private getKey(data: IBlockActionData): string {
