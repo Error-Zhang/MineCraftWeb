@@ -1,6 +1,7 @@
 import { del, get, post, put } from "./request.ts";
 import { IBlockReflect, IChunkData, IPlayer, IUser, IWorld } from "./interface.ts";
 import { useUserStore } from "@/store";
+import { Chunk } from "@engine/chunk/Chunk.ts";
 
 const getUserId = () => useUserStore.getState().userId;
 
@@ -51,13 +52,34 @@ export const worldApi = {
 	generateChunks(worldId: number, coords: { x: number; z: number }[]) {
 		return post<IChunkData[]>(`/chunk/generate/${worldId}`, coords);
 	},
+
+	async generateFlatWorld(worldId: number, coords: { x: number; z: number }[]) {
+		const generator = (chunkX: number, chunkZ: number) => {
+			const chunkData: IChunkData = {
+				cells: [],
+				shafts: [],
+				x: chunkX,
+				z: chunkZ,
+			};
+
+			// 生成基础地形
+			for (let y = 0; y < 128; y++) {
+				const id = y == 4 ? 4 : y < 4 ? 3 : 0;
+				for (let z = 0; z < 16; z++) {
+					for (let x = 0; x < 16; x++) {
+						const index = Chunk.getIndex(x, y, z);
+						chunkData.cells[index] = id;
+					}
+				}
+			}
+			return chunkData;
+		};
+		return coords.map(coord => generator(coord.x, coord.z));
+	},
 };
 
 export const blockApi = {
 	getBlockTypes() {
 		return get<IBlockReflect>("/block/types");
-	},
-	getBlockIconUrl(blockType: string) {
-		return "";
 	},
 };

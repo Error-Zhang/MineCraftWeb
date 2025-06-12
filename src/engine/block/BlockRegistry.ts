@@ -1,23 +1,23 @@
 import { BlockDefinition } from "../types/block.type";
 import { SingleClass } from "../core/Singleton.ts";
 import { TagID, TagManager } from "./TagManager";
-import { BlockIconStore } from "@engine/block-icon/store.ts";
+import { BlockIconStore } from "@engine/block-icon/BlockIconStore.ts";
 
 type TMeta = Record<string, unknown>;
 
 export class BlockRegistry extends SingleClass {
 	public blocks: BlockDefinition<TMeta>[] = [];
 	public readonly tagManager: TagManager;
+	public readonly DEFAULT_NAMESPACE = "minecraft";
 	private nameToIdMap = new Map<string, number>();
 	private nextId = 1;
 	private namespaceToIdMap = new Map<string, Set<number>>();
-	private readonly DEFAULT_NAMESPACE = "minecraft";
 
-	constructor(public decodeId?: (value: number) => number) {
+	constructor(decodeId?: (value: number) => number) {
 		super();
 		this.tagManager = new TagManager();
 		if (decodeId) {
-			BlockRegistry.decodeId = decodeId;
+			this.decodeId = decodeId;
 		}
 	}
 
@@ -25,14 +25,18 @@ export class BlockRegistry extends SingleClass {
 		return this.getInstance();
 	}
 
-	public static decodeId: (value: number) => number = value => value;
-
 	public static getById(blocks: BlockDefinition<TMeta>[], id: number) {
 		if (id === 0 || id === -1) return null;
 		const definition = blocks[id];
 		if (!definition) throw new Error(`Block ${id} not found`);
 		return blocks[id];
 	}
+
+	public isCodeId(value: number) {
+		return value !== this.decodeId(value);
+	}
+
+	public decodeId: (value: number) => number = value => value;
 
 	public async getBlockIcons() {
 		return BlockIconStore.getIconUrls(Array.from(this.nameToIdMap.keys()));
@@ -53,10 +57,10 @@ export class BlockRegistry extends SingleClass {
 
 		// 处理命名空间
 		const blockNamespace = namespace || this.getNamespace(block.blockType);
-
+		block.blockType = this.getFullName(block.blockType);
 		// 注册方块
 		this.setBlock(block.id, block);
-		this.nameToIdMap.set(this.getFullName(block.blockType), block.id);
+		this.nameToIdMap.set(block.blockType, block.id);
 
 		// 添加到命名空间映射
 		if (!this.namespaceToIdMap.has(blockNamespace)) {

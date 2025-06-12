@@ -69,6 +69,7 @@ const WorldManagerMenu: React.FC<{ setPage: (page: ScreenPage) => void }> = ({ s
 			useWorldStore.setState({
 				worldId: world.id!,
 				worldHost: world.user?.userName,
+				worldMode: world.worldMode,
 				season: world.season,
 			});
 			usePlayerStore.setState({

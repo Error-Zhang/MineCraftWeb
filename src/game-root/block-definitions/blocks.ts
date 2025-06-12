@@ -8,6 +8,7 @@ import { BlockCoder } from "@/game-root/block-definitions/BlockCoder.ts";
 import { getGrassColor } from "@/game-root/block-definitions/ColorHelper.ts";
 import { Color3 } from "@babylonjs/core";
 import { IBlockReflect } from "@/ui-root/api/interface.ts";
+import { interactEvents } from "@/game-root/core/events.ts";
 
 // 方块定义
 export const blocks: BlockDefinition<Record<string, any>>[] = [
@@ -147,6 +148,11 @@ export const blocks: BlockDefinition<Record<string, any>>[] = [
 			hardness: 2.5,
 			toolType: "axe",
 			interactable: true,
+		})
+		.withBehavior({
+			onInteract() {
+				interactEvents.emit("CraftTableBlock");
+			},
 		})
 		.asModel(Assets.blocks.models.CraftTable)
 		.build(),

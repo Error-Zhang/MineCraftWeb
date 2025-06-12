@@ -1,9 +1,11 @@
 import { Nullable } from "@babylonjs/core";
-import BlockType from "@/game-root/block-definitions/BlockType.ts";
-import { BlockRecipe } from "@/game-root/block-definitions/BlockRecipes.ts";
+import { BlockRecipe, BlockRecipeItem } from "@/game-root/block-definitions/BlockRecipes.ts";
 
 // 滑动匹配算法
-export function matchesPattern(playerGrid: Nullable<BlockType>[][], recipe: BlockRecipe): boolean {
+export function matchesPattern(
+	playerGrid: Nullable<BlockRecipeItem>[][],
+	recipe: BlockRecipe
+): boolean {
 	const pattern = recipe.pattern;
 
 	const patternHeight = pattern.length;
@@ -36,8 +38,8 @@ export function matchesPattern(playerGrid: Nullable<BlockType>[][], recipe: Bloc
 
 // 在某个偏移量检查是否匹配
 function matchAtOffset(
-	grid: Nullable<BlockType>[][],
-	pattern: Nullable<BlockType>[][],
+	grid: Nullable<BlockRecipeItem>[][],
+	pattern: Nullable<BlockRecipeItem>[][],
 	offsetX: number,
 	offsetY: number
 ): boolean {
@@ -67,6 +69,6 @@ function matchAtOffset(
 }
 
 // 生成左右镜像版本的 pattern
-function mirrorPattern(pattern: Nullable<BlockType>[][]) {
+function mirrorPattern(pattern: Nullable<BlockRecipeItem>[][]) {
 	return pattern.map(row => [...row].reverse());
 }

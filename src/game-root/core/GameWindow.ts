@@ -9,6 +9,8 @@ class GameWindow {
 	private canvas: HTMLCanvasElement;
 	private listeners: Map<string, Map<GameEventHandler, EventListener>> = new Map();
 
+	private clickCanvasCallbacks: (() => void)[] = [];
+
 	private activeChangeHandlers: Set<ActiveChangeHandler> = new Set();
 
 	private constructor(canvas: HTMLCanvasElement) {
@@ -16,6 +18,7 @@ class GameWindow {
 
 		canvas.onclick = () => {
 			if (!this.isActive) {
+				this.clickCanvasCallbacks.forEach(callback => callback());
 				this.togglePointerLock();
 			}
 		};
@@ -36,6 +39,14 @@ class GameWindow {
 			this.instance = new this(canvas);
 		}
 		return this.instance;
+	}
+
+	public onClickCanvas(callback: () => void) {
+		this.clickCanvasCallbacks.push(callback);
+	}
+
+	public onActiveChange(handler: ActiveChangeHandler) {
+		this.activeChangeHandlers.add(handler);
 	}
 
 	public async togglePointerLock() {
@@ -83,17 +94,17 @@ class GameWindow {
 			}
 		}
 		this.listeners.clear();
-
+		this.clickCanvasCallbacks.length = 0;
 		document.removeEventListener("pointerlockchange", this.boundOnPointerLockChange);
 		this.activeChangeHandlers.clear();
 	}
 
 	// 触发激活状态变化回调
-	private notifyActiveChange(isActive: boolean, reason?: string) {
+	private notifyActiveChange(isActive: boolean) {
 		this.isActive = isActive;
 		for (const handler of this.activeChangeHandlers) {
 			try {
-				handler(isActive, reason);
+				handler(isActive);
 			} catch (e) {
 				console.error("ActiveChangeHandler error:", e);
 			}

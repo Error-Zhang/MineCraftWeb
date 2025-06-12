@@ -26,6 +26,7 @@ import MathUtils from "@/game-root/utils/MathUtils.ts";
 import { BlockPlacement } from "@/game-root/managers/BlockPlacement.ts";
 import { BlockIconGenerator } from "@engine/block-icon/BlockIconGenerator.ts";
 import { BlockDefinition } from "@engine/types/block.type.ts";
+import { IChunkData } from "@/ui-root/api/interface.ts";
 
 export class Game {
 	public canvas: HTMLCanvasElement;
@@ -38,6 +39,7 @@ export class Game {
 	private vertexBuilder?: Comlink.Remote<IVertexBuilder>;
 	private screen?: LoadingScreen;
 	private readonly textures = [{ key: "blocks", path: Assets.blocks.atlas }];
+	private unsubscribes: Function[] = [];
 
 	constructor(canvas: HTMLCanvasElement) {
 		this.canvas = canvas;
@@ -105,6 +107,8 @@ export class Game {
 		this.npcPlayers.forEach(p => p.dispose());
 		this.npcPlayers.clear();
 		playerEvents.removeAllListeners();
+		this.unsubscribes.forEach(unsubscribe => unsubscribe());
+		this.unsubscribes.length = 0;
 		useGameStore.setState({ isGaming: false, isLoading: true });
 	}
 
@@ -150,16 +154,30 @@ export class Game {
 	}
 
 	private getWorldGenerator() {
-		return async (coords: Coords) => {
-			const raw = await worldApi.generateChunks(this.worldStore.worldId, coords);
-			await this.vertexBuilder?.addChunks(raw);
+		const processChunkData = async (raw: IChunkData[], isRLE: boolean) => {
+			const chunkDatas = raw.map(data => ({
+				blocks: isRLE
+					? <Uint16Array>MathUtils.decompressRLE(data.cells)
+					: Uint16Array.from(data.cells),
+				shafts: isRLE
+					? <Uint8Array>MathUtils.decompressRLE(data.shafts)
+					: Uint8Array.from(data.shafts),
+				position: { x: data.x, z: data.z },
+			}));
+			await this.vertexBuilder?.addChunks(chunkDatas);
 			return raw.map(data =>
 				Chunk.fromJSON({
-					blocks: <Uint16Array>MathUtils.decompressRLE(data.cells),
-					shafts: <Uint8Array>MathUtils.decompressRLE(data.shafts),
+					blocks: Uint16Array.from(data.cells),
+					shafts: Uint8Array.from(data.shafts),
 					position: { x: data.x, z: data.z },
 				})
 			);
+		};
+		const isFlat = this.worldStore.worldMode === 2;
+		const generator = isFlat ? worldApi.generateFlatWorld : worldApi.generateChunks;
+		return async (coords: Coords) => {
+			const raw = await generator(this.worldStore.worldId, coords);
+			return processChunkData(raw, !isFlat);
 		};
 	}
 
@@ -257,11 +275,12 @@ export class Game {
 				if (this.gameStore.isInitialized) {
 					enterToWorld();
 				} else {
-					useGameStore.subscribe(state => {
-						if (state.isInitialized) {
+					const unsub = useGameStore.subscribe((state, prevState) => {
+						if (state.isInitialized && state.isInitialized !== prevState.isInitialized) {
 							enterToWorld();
 						}
 					});
+					this.unsubscribes.push(unsub);
 				}
 			}
 		});

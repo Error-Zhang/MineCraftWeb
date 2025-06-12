@@ -22,6 +22,7 @@ import {
 	RenderComponent,
 } from "@engine/types/block.type.ts";
 import { BlockMaterialManager } from "@engine/renderer/BlockMaterialManager.ts";
+import { BlockRegistry } from "@engine/block/BlockRegistry.ts";
 
 export class MiniBlockBuilder extends SingleClass {
 	private offset: Vector3 = new Vector3(0.5, 0.5, 0.5);
@@ -329,17 +330,17 @@ export class MiniBlockBuilder extends SingleClass {
 			case "cube":
 				let cubeMesh = this.createCubeMesh(position, blockValue, render, properties, scale);
 				cubeMesh.isPickable = false;
-				break;
+				return cubeMesh;
 			case "cross":
 				let crossMesh = this.createCrossMesh(position, blockValue, render, properties, scale);
 				crossMesh.isPickable = false;
-				break;
+				return crossMesh;
 			case "model":
 				let model = await this.createModelMesh(position, blockValue, render, properties, scale);
 				model.getChildMeshes().forEach(child => {
 					child.isPickable = false;
 				});
-				break;
+				return model;
 		}
 	}
 
@@ -373,7 +374,12 @@ export class MiniBlockBuilder extends SingleClass {
 		properties?: BlockProperties,
 		scale = 0.25
 	): Mesh {
-		let uv = render.uvs[render.getStage?.(blockValue) ?? render.uvs.length - 1];
+		let uv =
+			render.uvs[
+				BlockRegistry.Instance.isCodeId(blockValue)
+					? render.getStage?.(blockValue) || 0
+					: render.uvs.length - 1
+			];
 		const mesh = new Mesh("miniCross", this.scene);
 		const data = MiniBlockBuilder.buildCrossMeshData(uv, render.getColor?.(blockValue), scale);
 		this.applyVertexData(mesh, data);

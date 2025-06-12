@@ -35,7 +35,7 @@ export class Chunk {
 		return Chunk.Height;
 	}
 
-	private static _size: number = 32;
+	private static _size: number = 16;
 
 	public get size(): number {
 		return Chunk.Size;

@@ -8,13 +8,14 @@ const GameCanvas: React.FC<{ canvasRef: RefObject<HTMLCanvasElement> }> = ({ can
 
 	useEffect(() => {
 		gameRef.current = new Game(canvasRef.current!);
-		useGameStore.subscribe((state, prevState) => {
+		const unsub = useGameStore.subscribe((state, prevState) => {
 			if (state.isGaming != prevState.isGaming) {
 				state.isGaming ? gameRef.current!.start() : gameRef.current!.dispose();
 			}
 		});
 		return () => {
 			gameRef.current!.destroy();
+			unsub();
 		};
 	}, []);
 

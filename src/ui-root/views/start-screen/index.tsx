@@ -84,13 +84,14 @@ const StartScreen: React.FC<{ hidden: boolean }> = ({ hidden }) => {
 		loadMusic();
 		window.addEventListener("pointerdown", handleUserInteraction);
 
-		useGameStore.subscribe(state => {
+		const unsub = useGameStore.subscribe(state => {
 			if (state.isGaming) {
 				stop();
 			}
 		});
 
 		return () => {
+			unsub();
 			// 清理事件监听
 			window.removeEventListener("pointerdown", handleUserInteraction);
 		};

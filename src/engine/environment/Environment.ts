@@ -15,8 +15,6 @@ import { SkyMaterial } from "@babylonjs/materials";
 import { GameTime } from "../systems/GameTime";
 import { SingleClass } from "@engine/core/Singleton.ts";
 import cloud from "./assets/Clouds.webp";
-import { ChunkManager } from "@engine/chunk/ChunkManager.ts";
-import { Chunk } from "@engine/chunk/Chunk.ts";
 
 export class Environment extends SingleClass {
 	public readonly Size: number = 1024;
@@ -45,10 +43,10 @@ export class Environment extends SingleClass {
 		this.createSky();
 		this.createCloud();
 		this.createLight();
-		scene.fogMode = Scene.FOGMODE_LINEAR;
-		scene.fogColor = new Color3(0.7, 0.8, 1.0); // 建议与天空渐变一致
-		scene.fogStart = (ChunkManager.ViewDistance - 2) * Chunk.Size; // 近处开始无雾，单位为米
-		scene.fogEnd = ChunkManager.ViewDistance * Chunk.Size; // 远处完全雾化
+		// scene.fogMode = Scene.FOGMODE_LINEAR;
+		// scene.fogColor = new Color3(0.7, 0.8, 1.0); // 建议与天空渐变一致
+		// scene.fogStart = (ChunkManager.ViewDistance - 2) * Chunk.Size; // 近处开始无雾，单位为米
+		// scene.fogEnd = ChunkManager.ViewDistance * Chunk.Size; // 远处完全雾化
 	}
 
 	public static override get Instance(): Environment {

@@ -1,6 +1,8 @@
 import { AbstractMesh, Vector3, Vector4 } from "@babylonjs/core";
 import BlockType from "./BlockType.ts";
 import {
+	BlockBehavior,
+	BlockDefinition,
 	BlockProperties,
 	CrossRender,
 	CubeRender,
@@ -105,21 +107,20 @@ export interface BlockMetaData {
 	[key: string]: any; // 允许任意属性
 }
 
+type RunTimeBlockDefine = Omit<BlockDefinition<BlockMetaData>, "blockType"> & {
+	blockType: BlockType;
+	options: {
+		properties?: Partial<BlockProperties>;
+		materialOptions?: RenderMaterial;
+	};
+	cubeGetters?: Pick<CubeRender, "getUv" | "getColor" | "getRotation">;
+	crossGetters?: Pick<CrossRender, "getStage" | "getColor">;
+};
+
 // 通用方块构造器
 export class BlockBuilder {
-	private block: {
-		id?: number;
-		blockType: BlockType;
-		metaData: BlockMetaData;
-		options: {
-			properties?: Partial<BlockProperties>;
-			materialOptions?: RenderMaterial;
-		};
-		tags: string[];
-		render: RenderComponent;
-		cubeGetters?: Pick<CubeRender, "getUv" | "getColor" | "getRotation">;
-		crossGetters?: Pick<CrossRender, "getStage" | "getColor">;
-	};
+	private block: RunTimeBlockDefine;
+
 	private defaultModelOffset = new Vector3(0.5, 0, 0.5);
 
 	constructor(blockType: BlockType, displayName: string, id?: number) {
@@ -131,6 +132,11 @@ export class BlockBuilder {
 			tags: [],
 			render: {} as RenderComponent,
 		};
+	}
+
+	withBehavior(behavior: BlockBehavior): BlockBuilder {
+		this.block.behavior = behavior;
+		return this;
 	}
 
 	withMetaData(
@@ -181,8 +187,6 @@ export class BlockBuilder {
 		}
 		return this;
 	}
-
-	withColor() {}
 
 	withMaterialOptions(materialOptions: Partial<RenderMaterial>, presetMatKey?: string) {
 		if (presetMatKey) {

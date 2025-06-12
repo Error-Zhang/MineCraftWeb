@@ -1,12 +1,13 @@
-import { IBlockReflect, IChunkData } from "@/ui-root/api/interface.ts";
+import { IBlockReflect } from "@/ui-root/api/interface.ts";
 import { MeshBuilderFun } from "@engine/renderer/WorldRenderer.ts";
+import { ChunkData } from "@engine/types/chunk.type.ts";
 
 export interface IVertexBuilderConstructor {
 	new (...args: any[]): IVertexBuilder;
 }
 
 export interface IVertexBuilder {
-	addChunks: (chunks: IChunkData[]) => void;
+	addChunks: (chunksDatas: ChunkData[]) => void;
 	addBlocks: (blockTypes: IBlockReflect) => void;
 	buildMesh: MeshBuilderFun;
 	removeChunk: (key: string) => void;

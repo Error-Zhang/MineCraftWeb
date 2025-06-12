@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 import GameWindow from "@/game-root/core/GameWindow.ts";
 
 type KeyBinding = string | string[];
+const escapes: Function[] = [];
 
 /**
  * 监听键盘按键按下，触发回调
@@ -19,6 +20,11 @@ export function useToggle(
 	isToggle?: () => boolean
 ) {
 	useEffect(() => {
+		const game = GameWindow.Instance;
+		if (onEscape) {
+			escapes.push(onEscape);
+			//game.onClickCanvas(onEscape);
+		}
 		if (isToggle && !isToggle()) return;
 
 		const handleKeyDown = (e: KeyboardEvent) => {
@@ -26,7 +32,6 @@ export function useToggle(
 
 			const keyArray = Array.isArray(keys) ? keys : [keys];
 			const qkeyArray = qkeys ? (Array.isArray(qkeys) ? qkeys : [qkeys]) : [];
-			const game = GameWindow.Instance;
 
 			if (game.isInGame && keyArray.some(key => key.toLowerCase() === pressedKey)) {
 				onToggle();
@@ -36,13 +41,14 @@ export function useToggle(
 				!game.isInGame &&
 				qkeyArray.some(key => key.toLowerCase() === pressedKey)
 			) {
-				onEscape?.();
+				escapes.forEach(escape => escape());
 				game.togglePointerLock();
 			}
 		};
 
 		window.addEventListener("keydown", handleKeyDown);
 		return () => {
+			escapes.length = 0;
 			window.removeEventListener("keydown", handleKeyDown);
 		};
 	}, []);

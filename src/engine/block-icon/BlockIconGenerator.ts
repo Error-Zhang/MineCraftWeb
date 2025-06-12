@@ -1,5 +1,13 @@
-import { ArcRotateCamera, Camera, Color4, Engine, Scene, Vector3 } from "@babylonjs/core";
-import { BlockIconStore } from "@engine/block-icon/store.ts";
+import {
+	ArcRotateCamera,
+	Camera,
+	Color4,
+	Engine,
+	HemisphericLight,
+	Scene,
+	Vector3,
+} from "@babylonjs/core";
+import { BlockIconStore } from "@engine/block-icon/BlockIconStore.ts";
 import { MiniBlockBuilder } from "@engine/renderer/MiniBlockBuilder.ts";
 import { BlockDefinition } from "@engine/types/block.type.ts";
 import {
@@ -13,6 +21,7 @@ export class BlockIconGenerator {
 	private engine: Engine;
 	private canvas: HTMLCanvasElement;
 	private camera: ArcRotateCamera;
+	private hemisphericLight: HemisphericLight;
 	private blockTextureManager: BlockTextureManager;
 	private blockMaterialManager: BlockMaterialManager;
 	private miniBlockBuilder: MiniBlockBuilder;
@@ -25,7 +34,7 @@ export class BlockIconGenerator {
 
 		this.scene = new Scene(this.engine);
 		this.scene.clearColor = new Color4(0, 0, 0, 0);
-
+		this.hemisphericLight = new HemisphericLight("hemiLight", new Vector3(0, 1, 0), this.scene);
 		this.camera = new ArcRotateCamera(
 			"Camera",
 			Math.PI / 4,
@@ -81,11 +90,7 @@ export class BlockIconGenerator {
 	}
 
 	private async generateBlockIcon(block: BlockDefinition<any>): Promise<Blob> {
-		for (const mesh of this.scene.meshes) {
-			if (mesh.name !== "Camera") mesh.dispose();
-		}
-
-		await this.miniBlockBuilder.createMesh(
+		const mesh = await this.miniBlockBuilder.createMesh(
 			Vector3.Zero(),
 			block.id!,
 			block.render,
@@ -101,6 +106,7 @@ export class BlockIconGenerator {
 
 		return await new Promise<Blob>(resolve => {
 			this.canvas.toBlob(blob => resolve(blob!), "image/webp");
+			mesh.dispose();
 		});
 	}
 }

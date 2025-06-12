@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { SlotType } from "@/ui-root/components/slot/index.tsx";
 import "./index.less";
 import { useGameStore } from "@/store";
+import GameWindow from "@/game-root/core/GameWindow.ts";
 
 // 使用更严格的类型定义
 type Position = { x: number; y: number };
@@ -67,6 +68,10 @@ export const HandSlotManager: React.FC<HandSlotManagerProps> = ({ offset = { x: 
 		window.addEventListener("mouseup", handleMouseUp);
 		window.addEventListener("contextmenu", e => e.preventDefault());
 
+		GameWindow.Instance.onActiveChange(active => {
+			HandSlotController.clearHandSlot();
+		});
+
 		return () => {
 			window.removeEventListener("mousemove", handleMouseMove);
 			window.removeEventListener("keydown", handleKeyDown);
@@ -120,11 +125,4 @@ export const HandSlotController = {
 	},
 	isHolding: () => currentHandSlot !== null,
 	getHandSlot: () => currentHandSlot,
-	subscribe: (callback: (slot: SlotType | null) => void) => {
-		subscribers.push(callback);
-		return () => {
-			const index = subscribers.indexOf(callback);
-			if (index > -1) subscribers.splice(index, 1);
-		};
-	},
 };

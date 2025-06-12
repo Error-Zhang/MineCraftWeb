@@ -221,6 +221,7 @@ export class ChunkManager extends SingleClass {
 
 		let needRender = false;
 		let isRemove = false;
+
 		if (oldDef?.render.type === "model" || newBlockDef?.render.type === "model") {
 			const renderer = this.worldRenderer.getRenderer(chunk.Key)!;
 			let key = `${x},${y},${z}`;
@@ -237,6 +238,7 @@ export class ChunkManager extends SingleClass {
 		if (isRemove) {
 			MiniBlockBuilder.Instance.createMesh(position, oldValue, oldDef.render, oldDef.properties);
 		}
+
 		chunk.setBlock(localX, y, localZ, blockValue);
 		return needRender;
 	}

@@ -71,7 +71,6 @@ export class BlockIconStore {
 
 	/** 根据传入的 keys 获取所有对应的 icon URL */
 	static async getIconUrls(keys: string[]) {
-		console.log(keys);
 		const db = await this.db;
 		const tx = db.transaction("blocks", "readonly");
 		const store = tx.objectStore("blocks");

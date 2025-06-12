@@ -4,8 +4,7 @@ import InventoryGrid from "@/ui-root/components/inventory-grid";
 import { matchesPattern } from "@/ui-root/views/craft-table/match.ts";
 import { useInventorySlots } from "@/ui-root/components/inventory-grid/useInventorySlots.tsx";
 import "./index.less";
-import BlockType from "@/game-root/block-definitions/BlockType.ts";
-import { BlockRecipe } from "@/game-root/block-definitions/BlockRecipes.ts";
+import { BlockRecipe, getBlockName } from "@/game-root/block-definitions/BlockRecipes.ts";
 import { useBlockStore } from "@/store";
 
 interface CraftingPanelProps {
@@ -13,7 +12,7 @@ interface CraftingPanelProps {
 	guid: string;
 	rows: number;
 	columns: number;
-	recipes: Record<BlockType, BlockRecipe[]>;
+	recipes: Record<string, BlockRecipe[]>;
 }
 
 const CraftingPanel: React.FC<CraftingPanelProps> = ({ title, guid, rows, columns, recipes }) => {
@@ -40,16 +39,19 @@ const CraftingPanel: React.FC<CraftingPanelProps> = ({ title, guid, rows, column
 			.find(({ recipe }) =>
 				matchesPattern(reshape(gridSlots.map(item => (item ? item.key : null))), recipe)
 			);
-
 		if (result) {
 			const output = result.recipe.output;
-			const def = useBlockStore.getState().blockRegistry?.getByName(BlockType[output.item])!;
+			const blockRegistry = useBlockStore.getState().blockRegistry!;
+			const outputName = getBlockName(output.item);
+			const def = blockRegistry.getByName(outputName)!;
+
 			setResultSlot([
 				{
 					id: def.id || 0,
-					key: output.item,
+					key: outputName,
 					displayName: def.metaData.displayName as string,
 					value: output.count,
+					icon: useBlockStore.getState().blockIcons![outputName],
 					source: "CraftTableResult",
 				},
 			]);

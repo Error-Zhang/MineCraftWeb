@@ -1,6 +1,7 @@
 import { IBlockActionData } from "@/game-root/client/interface.ts";
 import { WorldController } from "@engine/core/WorldController.ts";
 import { IVertexBuilder } from "@/game-root/worker/interface.ts";
+import * as Comlink from "comlink";
 
 export class BlockPlacement {
 	private queueMap = new Map<string, IBlockActionData>();
@@ -10,7 +11,7 @@ export class BlockPlacement {
 
 	constructor(
 		private world: WorldController,
-		private vertexBuilder?: IVertexBuilder
+		private vertexBuilder?: Comlink.Remote<IVertexBuilder>
 	) {}
 
 	public enqueuePlacement(data: IBlockActionData[]) {
@@ -40,22 +41,26 @@ export class BlockPlacement {
 	}
 
 	private async flushQueue() {
-		if (!this.queueMap.size) return;
+		try {
+			if (!this.queueMap.size) return;
 
-		const blocks = Array.from(this.queueMap.values());
+			const blocks = Array.from(this.queueMap.values());
 
-		// 提前设置 vertexBuilder
-		if (this.vertexBuilder) {
-			for (const block of blocks) {
-				await this.vertexBuilder.setBlock(block.x, block.y, block.z, block.blockId);
+			// 提前设置 vertexBuilder
+			if (this.vertexBuilder) {
+				for (const block of blocks) {
+					await this.vertexBuilder.setBlock(block.x, block.y, block.z, block.blockId);
+				}
 			}
+
+			// 通知 world 进行正式更新
+			this.world.setBlocks(blocks);
+
+			this.queueMap.clear();
+			this.lastFlushTime = performance.now();
+		} catch (e) {
+			console.error(e);
 		}
-
-		// 通知 world 进行正式更新
-		this.world.setBlocks(blocks);
-
-		this.queueMap.clear();
-		this.lastFlushTime = performance.now();
 	}
 
 	private getKey(data: IBlockActionData): string {

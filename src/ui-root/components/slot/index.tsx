@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import "./index.less";
 import { Nullable } from "@babylonjs/core";
 import { HandSlotController } from "@/ui-root/components/slot/HandSlotManager.tsx";
@@ -43,15 +43,6 @@ const Slot: React.FC<SlotProps> = ({
 	const [isActive, setIsActive] = useState(false);
 	const [imgError, setImgError] = useState(false);
 
-	useEffect(() => {
-		const clear = HandSlotController.subscribe(slot => {
-			!slot && setIsActive(false);
-		});
-		return () => {
-			clear();
-		};
-	}, [setIsActive]);
-
 	const handleClick = (e: any) => {
 		if (!draggable) return;
 
@@ -59,7 +50,6 @@ const Slot: React.FC<SlotProps> = ({
 			if (!slot) return;
 			HandSlotController.setHandSlot({ ...slot });
 			onDragStart?.(slot);
-			if (slot.source !== "Catalog") setIsActive(true);
 		} else {
 			const handSlot = HandSlotController.getHandSlot();
 			if (allowedDropSources.includes(handSlot!.source) || allowedDropSources.includes("all")) {

@@ -35,6 +35,7 @@ export const usePlayerStore = create<PlayerStore>((set, get) => ({
 export const useWorldStore = create<WorldStore>(set => ({
 	worldId: 0,
 	worldHost: "",
+	worldMode: 0,
 	season: 0,
 	worldController: null,
 	reset: () => set({ worldId: 0, worldController: null }),
@@ -43,4 +44,7 @@ export const useWorldStore = create<WorldStore>(set => ({
 export const useBlockStore = create<BlockStore>((set, get) => ({
 	blockRegistry: null,
 	blockTypes: null,
+	blockRecipes: null,
+	blockIcons: null,
+	reset: () => set({ blockRegistry: null, blockTypes: null, blockRecipes: null, blockIcons: null }),
 }));

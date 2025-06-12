@@ -1,14 +1,14 @@
 import * as Comlink from "comlink";
-import { IBlockReflect, IChunkData } from "@/ui-root/api/interface.ts";
+import { IBlockReflect } from "@/ui-root/api/interface.ts";
 import { IVertexBuilder } from "@/game-root/worker/interface.ts";
 import { Chunk } from "@engine/chunk/Chunk.ts";
-import MathUtils from "@/game-root/utils/MathUtils.ts";
 import { BlockDefinition } from "@engine/types/block.type.ts";
 import { BlockCoder } from "@/game-root/block-definitions/BlockCoder.ts";
 import { MeshBuilderContext } from "@engine/types/mesh.type.ts";
 import { ChunkMeshBuilder } from "@engine/renderer/ChunkMeshBuilder.ts";
 import { getCombinedBlocks } from "@/game-root/block-definitions/blocks.ts";
 import { VoxelEngine } from "@engine/core/VoxelEngine.ts";
+import { ChunkData } from "@engine/types/chunk.type.ts";
 
 class VertexBuilder implements IVertexBuilder {
 	private _chunks: Map<string, Chunk> = new Map();
@@ -40,18 +40,8 @@ class VertexBuilder implements IVertexBuilder {
 		chunk?.setBlock(localX, y, localZ, blockId);
 	}
 
-	public addChunks(chunksData: IChunkData[]) {
-		const chunks = chunksData.map(
-			(chunkData: { cells: number[]; shafts: number[]; x: number; z: number }) =>
-				Chunk.fromJSON({
-					blocks: <Uint16Array>MathUtils.decompressRLE(chunkData.cells),
-					shafts: <Uint8Array>MathUtils.decompressRLE(chunkData.shafts),
-					position: {
-						x: chunkData.x,
-						z: chunkData.z,
-					},
-				})
-		);
+	public addChunks(chunksDatas: ChunkData[]) {
+		const chunks = chunksDatas.map(chunkData => Chunk.fromJSON(chunkData));
 		chunks.forEach((chunk: Chunk) => {
 			this._chunks.set(chunk.Key, chunk);
 		});
