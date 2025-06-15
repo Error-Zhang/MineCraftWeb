@@ -1,6 +1,6 @@
 import React, { ReactNode } from "react";
 import "./index.less";
-import buttonClickSound from "@/ui-root/assets/sounds/ButtonClick.flac";
+import { audios } from "@/ui-root/assets/sounds";
 
 interface GameButtonProps {
 	children?: ReactNode;
@@ -9,14 +9,13 @@ interface GameButtonProps {
 	disabled?: boolean;
 }
 
-const audio = new Audio(buttonClickSound);
 const GameButton: React.FC<GameButtonProps> = ({ children, onClick, className, disabled }) => {
 	return (
 		<button
 			disabled={disabled}
 			className={`game-button ${className}`}
 			onClick={() => {
-				audio.play();
+				audios.ButtonClick.play();
 				onClick?.();
 			}}
 		>

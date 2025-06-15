@@ -25,7 +25,7 @@ const MainMenu: React.FC<{ setPage: (page: ScreenPage) => void }> = ({ setPage }
 			</div>
 
 			<GameButton className="login-btn" onClick={() => setShowModal(true)}>
-				<img src={webIcon} />
+				<img src={webIcon} alt="" />
 			</GameButton>
 			{showModal && <AuthModal onClose={() => setShowModal(false)} />}
 		</div>

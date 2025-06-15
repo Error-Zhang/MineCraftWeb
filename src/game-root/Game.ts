@@ -27,6 +27,7 @@ import { BlockPlacement } from "@/game-root/managers/BlockPlacement.ts";
 import { BlockIconGenerator } from "@engine/block-icon/BlockIconGenerator.ts";
 import { BlockDefinition } from "@engine/types/block.type.ts";
 import { IChunkData } from "@/ui-root/api/interface.ts";
+import { audios } from "@/ui-root/assets/sounds";
 
 export class Game {
 	public canvas: HTMLCanvasElement;
@@ -189,6 +190,7 @@ export class Game {
 				});
 			});
 		this.npcPlayers.set(playerId, npc);
+		audios.Message.play();
 	}
 
 	private setupEvents(world: WorldController) {

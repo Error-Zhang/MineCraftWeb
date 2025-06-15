@@ -27,7 +27,7 @@ export class ChunkManager extends SingleClass {
 	private loadCallbacks: Array<(chunk: Chunk) => void> = [];
 	private updatedCallbacks: Array<(progress: number) => void> = [];
 	private isUpdating: boolean = false;
-	private unloadTimer: number | null = null;
+	private unloadTimer: NodeJS.Timeout | null = null;
 	private chunksToUnload: Map<string, number> = new Map(); // 存储区块key和标记时间戳
 	private readonly UNLOAD_DELAY = 1000 * 30; // 60秒后卸载
 	private readonly POLLING_TIME = 1000 * 30; // 每分检查一次

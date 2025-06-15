@@ -31,20 +31,11 @@ const StartScreen: React.FC<{ hidden: boolean }> = ({ hidden }) => {
 		let needsUserInteraction = false;
 
 		const loadMusic = async () => {
-			return;
-			const modules = import.meta.glob("/src/ui-root/assets/musics/*.mp3", {
+			const modules = import.meta.glob("/src/ui-root/assets/musics/*", {
 				eager: true,
 			}) as Record<string, { default: string }>;
-			const sorted = Object.entries(modules)
-				.sort(([a], [b]) => a.localeCompare(b))
-				.map(([_, mod]) => mod.default);
+			const sorted = Object.entries(modules).map(([_, mod]) => mod.default);
 			musicListRef.current = sorted;
-			try {
-				await playMusic(0);
-			} catch (err) {
-				console.warn("自动播放失败，等待用户交互");
-				needsUserInteraction = true;
-			}
 		};
 
 		const stop = () => {
@@ -56,7 +47,7 @@ const StartScreen: React.FC<{ hidden: boolean }> = ({ hidden }) => {
 			}
 		};
 
-		const playMusic = async (index: number) => {
+		const playMusic = (index: number) => {
 			const list = musicListRef.current;
 			if (!list.length) return;
 
@@ -70,7 +61,9 @@ const StartScreen: React.FC<{ hidden: boolean }> = ({ hidden }) => {
 			});
 
 			audio.volume = 0.5;
-			await audio.play();
+			setTimeout(() => {
+				audio.play();
+			}, 1000 * 60);
 		};
 
 		const handleUserInteraction = () => {
@@ -84,8 +77,10 @@ const StartScreen: React.FC<{ hidden: boolean }> = ({ hidden }) => {
 		loadMusic();
 		window.addEventListener("pointerdown", handleUserInteraction);
 
-		const unsub = useGameStore.subscribe(state => {
-			if (state.isGaming) {
+		const unsub = useGameStore.subscribe((state, prevState) => {
+			if (state.isGaming && prevState.isGaming != state.isGaming) {
+				playMusic(currentIndexRef.current);
+			} else if (!state.isGaming && prevState.isGaming != state.isGaming) {
 				stop();
 			}
 		});

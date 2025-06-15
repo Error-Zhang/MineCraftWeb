@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import GameWindow from "@/game-root/core/GameWindow.ts";
+import { audios } from "@/ui-root/assets/sounds";
 
 type KeyBinding = string | string[];
 const escapes: Function[] = [];
@@ -23,7 +24,7 @@ export function useToggle(
 		const game = GameWindow.Instance;
 		if (onEscape) {
 			escapes.push(onEscape);
-			//game.onClickCanvas(onEscape);
+			game.onClickCanvas(onEscape);
 		}
 		if (isToggle && !isToggle()) return;
 
@@ -36,6 +37,7 @@ export function useToggle(
 			if (game.isInGame && keyArray.some(key => key.toLowerCase() === pressedKey)) {
 				onToggle();
 				game.togglePointerLock();
+				audios.ButtonClick.play();
 			} else if (
 				qkeys?.length &&
 				!game.isInGame &&
@@ -43,6 +45,7 @@ export function useToggle(
 			) {
 				escapes.forEach(escape => escape());
 				game.togglePointerLock();
+				audios.ButtonClick.play();
 			}
 		};
 

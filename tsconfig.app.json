@@ -29,10 +29,10 @@
     /* 配置别名 */
     "paths": {
       "@/*": [
-        "src/*"
+        "./src/*"
       ],
       "@engine/*": [
-        "src/engine/*"
+        "./src/engine/*"
       ]
     }
   },

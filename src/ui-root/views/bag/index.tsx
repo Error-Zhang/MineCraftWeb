@@ -8,6 +8,7 @@ import { interactEvents } from "@/game-root/core/events.ts";
 import BlockType from "@/game-root/block-definitions/BlockType.ts";
 import CraftTable from "@/ui-root/views/craft-table";
 import GameWindow from "@/game-root/core/GameWindow.ts";
+import { audios } from "@/ui-root/assets/sounds";
 
 const PanelMap: Partial<Record<string | number, React.FC<{ guid: string }>>> = {
 	[BlockType.CraftTableBlock]: ({ guid }) => <CraftTable guid={guid} />,
@@ -33,6 +34,7 @@ const Bag: React.FC<{ rows: number; columns: number }> = ({ rows, columns }) => 
 			});
 			setIsActive(true);
 			GameWindow.Instance.togglePointerLock();
+			audios.ButtonClick.play();
 		});
 	}, []);
 

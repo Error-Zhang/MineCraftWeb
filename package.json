@@ -1,13 +1,40 @@
 {
   "name": "minecraft",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "electron:dev": "electron electron/main.js",
+    "electron:build": "electron-builder"
+  },
+  "main": "electron/main.js",
+  "description": "Minecraft-like game with Babylon.js",
+  "author": "Error.Zhang",
+  "build": {
+    "copyright": "© 2025 Error.Zhang. All rights reserved.",
+    "productName": "MineCraft",
+    "directories": {
+      "buildResources": "assets",
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/main.js"
+    ],
+    "extraResources": [],
+    "mac": {
+      "target": "dmg"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
   },
   "dependencies": {
     "@babylonjs/core": "^8.3.1",
@@ -33,6 +60,8 @@
     "@types/react": "^18.0.0",
     "@types/react-dom": "^18.0.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^36.4.0",
+    "electron-builder": "^26.0.12",
     "globals": "^16.0.0",
     "less": "^4.3.0",
     "less-loader": "^12.2.0",

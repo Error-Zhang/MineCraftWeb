@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import "./index.less";
 import { Nullable } from "@babylonjs/core";
 import { HandSlotController } from "@/ui-root/components/slot/HandSlotManager.tsx";
+import { audios } from "@/ui-root/assets/sounds";
 
 export type SlotType = Nullable<{
 	id: number;
@@ -50,11 +51,13 @@ const Slot: React.FC<SlotProps> = ({
 			if (!slot) return;
 			HandSlotController.setHandSlot({ ...slot });
 			onDragStart?.(slot);
+			audios.ItemMoved.play();
 		} else {
 			const handSlot = HandSlotController.getHandSlot();
 			if (allowedDropSources.includes(handSlot!.source) || allowedDropSources.includes("all")) {
 				onDrop?.({ ...handSlot!, dropCount: handSlot!.value });
 				HandSlotController.clearHandSlot();
+				audios.ItemMoved.play();
 			}
 		}
 	};
@@ -67,9 +70,11 @@ const Slot: React.FC<SlotProps> = ({
 			if (allowedDropSources.includes(handSlot!.source) || allowedDropSources.includes("all")) {
 				onDrop?.({ ...handSlot!, dropCount: 1 });
 				HandSlotController.setHandSlot({ ...handSlot, value: handSlot.value - 1 });
+				audios.ItemMoved.play();
 			}
 			if (HandSlotController.getHandSlot()!.value < 1) {
 				HandSlotController.clearHandSlot();
+				audios.ItemMoved.play();
 			}
 		}
 	};

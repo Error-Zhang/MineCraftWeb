@@ -18,7 +18,6 @@ const notifySubscribers = (slot: SlotType | null) => {
 	currentHandSlot = slot;
 	subscribers.forEach(subscriber => subscriber(slot));
 };
-
 export const HandSlotManager: React.FC<HandSlotManagerProps> = ({ offset = { x: 10, y: 10 } }) => {
 	const [handSlot, setHandSlot] = useState<SlotType | null>(null);
 	const [position, setPosition] = useState<Position>({ x: 0, y: 0 });

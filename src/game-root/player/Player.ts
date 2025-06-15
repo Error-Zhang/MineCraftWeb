@@ -21,6 +21,7 @@ import { PlayerInputSystem } from "@/game-root/player/PlayerInputSystem.ts";
 import { PlayerModel } from "@/game-root/player/PlayerModel.ts";
 import { IBlockActionData } from "@/game-root/client/interface.ts";
 import { BlockMaterialManager } from "@engine/renderer/BlockMaterialManager.ts";
+import { audios } from "@/ui-root/assets/sounds";
 
 export class Player {
 	public playerModel?: PlayerModel;
@@ -126,6 +127,7 @@ export class Player {
 		if (blockId === 0) return;
 		const { x, y, z } = placePos;
 		this.placeBlockCallBacks.forEach(callback => callback([{ x, y, z, blockId }]));
+		audios.BlockPlaced.play();
 	}
 
 	// 销毁方块
@@ -141,6 +143,7 @@ export class Player {
 			blocks.push({ x, y, z, blockId: 0 });
 		}
 		this.placeBlockCallBacks.forEach(callback => callback(blocks));
+		audios.BlockPlaced.play();
 	}
 
 	private showBlockHoverOutline() {

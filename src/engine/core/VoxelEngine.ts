@@ -173,7 +173,7 @@ export class VoxelEngine {
 
 	private async initPhysics(scene: Scene) {
 		const havok = await HavokPhysics({
-			locateFile: path => `/havok/${path}`,
+			locateFile: path => `./havok/${path}`,
 		});
 		this.havokPlugin = new HavokPlugin(true, havok);
 		scene.enablePhysics(new Vector3(0, -9.81, 0), this.havokPlugin);
