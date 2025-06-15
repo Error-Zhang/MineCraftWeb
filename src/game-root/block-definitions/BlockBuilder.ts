@@ -12,7 +12,7 @@ import {
 	RenderMaterial,
 	TransparencyType,
 } from "@engine/types/block.type.ts";
-import ModelBlockManager from "@/game-root/block-definitions/ModelBlockManager.ts";
+import ModelBlockManager from "@engine/renderer/ModelBlockManager.ts";
 import { blocksUvTable } from "@/game-root/block-definitions/TextureAtlas.ts";
 import { BlockMaterialManager } from "@engine/renderer/BlockMaterialManager.ts";
 import { TAG_GETTERS } from "./BlockTags.ts";
@@ -84,17 +84,17 @@ function createModelRender(
 		matKey,
 		size,
 		miniBlockScale,
-		loadModel: async (scene, position, material, options) => {
+		loadModel: async (modelBlockManager: ModelBlockManager, position, material, options) => {
 			const setMesh2 = (mesh: AbstractMesh) => {
 				mesh.position.addInPlace(offset);
 				mesh.material = material;
 				mesh.isPickable = false;
 				setMesh?.(mesh);
 			};
-			const model = await ModelBlockManager.loadModel(path, scene, setMesh2, options);
+			const model = await modelBlockManager.loadModel(path, setMesh2, options);
 			model.position = position;
 			model.scaling.scaleInPlace(options?.scale || 1);
-			options?.attachCollider && ModelBlockManager.attachCollider(scene, model, size);
+			options?.attachCollider && modelBlockManager.attachCollider(model, size);
 			return model;
 		},
 	};

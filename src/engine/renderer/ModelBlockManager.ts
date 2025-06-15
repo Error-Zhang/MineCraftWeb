@@ -1,19 +1,28 @@
 import { ImportMeshAsync, MeshBuilder, Scene, TransformNode, Vector3 } from "@babylonjs/core";
 import { BlockMaterialManager } from "@engine/renderer/BlockMaterialManager.ts";
+import { SingleClass } from "@engine/core/Singleton.ts";
 
-class ModelBlockManager {
-	static meshes: Map<string, TransformNode> = new Map();
+class ModelBlockManager extends SingleClass {
+	meshes: Map<string, TransformNode> = new Map();
 
-	static dispose(): void {
+	constructor(public scene: Scene) {
+		super();
+	}
+
+	static get Instance(): ModelBlockManager {
+		return this.getInstance();
+	}
+
+	dispose(): void {
 		this.meshes.clear();
 	}
 
-	static async loadModel(modelPath: string, scene: Scene, setMesh: Function, options: any) {
-		let key = `${scene.uid}-${modelPath}-${JSON.stringify(options)}`;
+	async loadModel(modelPath: string, setMesh: Function, options: any) {
+		let key = `${modelPath}-${JSON.stringify(options)}`;
 		if (this.meshes.has(key)) return this.meshes.get(key)!.clone(key, null)!;
 
-		const { meshes } = await ImportMeshAsync(modelPath, scene);
-		const root = new TransformNode(`${key}_root`, scene);
+		const { meshes } = await ImportMeshAsync(modelPath, this.scene);
+		const root = new TransformNode(`${key}_root`, this.scene);
 
 		for (const mesh of meshes.filter(m => m.name !== "__root__")) {
 			mesh.setParent(root);
@@ -27,11 +36,11 @@ class ModelBlockManager {
 		return root.clone(key, null)!;
 	}
 
-	static attachCollider(scene: Scene, node: TransformNode, size: Vector3) {
+	attachCollider(node: TransformNode, size: Vector3) {
 		const collider = MeshBuilder.CreateBox(
 			"collider",
 			{ width: size.x, height: size.y, depth: size.z },
-			scene
+			this.scene
 		);
 
 		const mat = BlockMaterialManager.Instance.getMaterialByKey(

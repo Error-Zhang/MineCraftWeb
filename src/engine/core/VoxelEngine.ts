@@ -20,6 +20,7 @@ import { WorldContext } from "@engine/core/WorldContext.ts";
 import { MiniBlockBuilder } from "@engine/renderer/MiniBlockBuilder.ts";
 import HavokPhysics from "@babylonjs/havok";
 import { HavokPlugin } from "@babylonjs/core/Physics/v2";
+import ModelBlockManager from "@engine/renderer/ModelBlockManager.ts";
 // 注册着色器
 Effect.ShadersStore["waterVertexShader"] = waterVertexShader;
 Effect.ShadersStore["waterFragmentShader"] = waterFragmentShader;
@@ -127,9 +128,11 @@ export class VoxelEngine {
 			scene
 		);
 		BlockMaterialManager.registerCustomMaterials(materials || []);
+		const modelBlockManager: ModelBlockManager = Singleton.create(ModelBlockManager, scene);
 		this.miniBlockBuilder = Singleton.create(MiniBlockBuilder, scene, blockMaterialManager);
 		this._worldContext.add(blockTextureManager);
 		this._worldContext.add(blockMaterialManager);
+		this._worldContext.add(modelBlockManager);
 		this._worldContext.add(this.miniBlockBuilder);
 		console.log("[VoxelEngine] 纹理材质注册完成");
 

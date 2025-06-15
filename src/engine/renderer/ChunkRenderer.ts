@@ -21,6 +21,7 @@ import { FaceDirectionOffset } from "./Constant.ts";
 import { WorldRenderer } from "@engine/renderer/WorldRenderer.ts";
 import { ChunkMeshBuilder } from "@engine/renderer/ChunkMeshBuilder.ts";
 import { PhysicsBody, PhysicsMotionType, PhysicsShapeBox } from "@babylonjs/core/Physics/v2";
+import ModelBlockManager from "@engine/renderer/ModelBlockManager.ts";
 
 export class ChunkRenderer {
 	private root: TransformNode;
@@ -136,9 +137,14 @@ export class ChunkRenderer {
 		const def = BlockRegistry.Instance.getById(blockId)!;
 		const render = <ModelRender>def.render;
 		const mat = BlockMaterialManager.Instance.getMaterialByKey(render.matKey);
-		const model = await render.loadModel(this.scene, new Vector3(x, y, z), mat.clone(mat.name)!, {
-			attachCollider: true,
-		});
+		const model = await render.loadModel(
+			ModelBlockManager.Instance,
+			new Vector3(x, y, z),
+			mat.clone(mat.name)!,
+			{
+				attachCollider: true,
+			}
+		);
 		model.metadata = { blockId };
 		model.getChildMeshes().forEach(child => {
 			Environment.Instance.shadowGenerator?.addShadowCaster(child);

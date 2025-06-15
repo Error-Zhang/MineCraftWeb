@@ -23,6 +23,7 @@ import {
 } from "@engine/types/block.type.ts";
 import { BlockMaterialManager } from "@engine/renderer/BlockMaterialManager.ts";
 import { BlockRegistry } from "@engine/block/BlockRegistry.ts";
+import ModelBlockManager from "@engine/renderer/ModelBlockManager.ts";
 
 export class MiniBlockBuilder extends SingleClass {
 	private offset: Vector3 = new Vector3(0.5, 0.5, 0.5);
@@ -302,7 +303,7 @@ export class MiniBlockBuilder extends SingleClass {
 	) {
 		scale = scale ?? render.miniBlockScale;
 		const model = await render.loadModel(
-			this.scene,
+			ModelBlockManager.Instance,
 			position,
 			this.blockMaterialManager.getMaterialByKey(render.matKey),
 			{ scale }

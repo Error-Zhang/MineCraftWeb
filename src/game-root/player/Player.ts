@@ -127,6 +127,12 @@ export class Player {
 		if (blockId === 0) return;
 		const { x, y, z } = placePos;
 		this.placeBlockCallBacks.forEach(callback => callback([{ x, y, z, blockId }]));
+		this.playPlacedAudio();
+	}
+
+	private playPlacedAudio() {
+		audios.BlockPlaced.pause();
+		audios.BlockPlaced.currentTime = 0;
 		audios.BlockPlaced.play();
 	}
 
@@ -143,7 +149,7 @@ export class Player {
 			blocks.push({ x, y, z, blockId: 0 });
 		}
 		this.placeBlockCallBacks.forEach(callback => callback(blocks));
-		audios.BlockPlaced.play();
+		this.playPlacedAudio();
 	}
 
 	private showBlockHoverOutline() {

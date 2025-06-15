@@ -1,4 +1,5 @@
-import { Color3, Color4, Material, Scene, TransformNode, Vector3, Vector4 } from "@babylonjs/core";
+import { Color3, Color4, Material, TransformNode, Vector3, Vector4 } from "@babylonjs/core";
+import ModelBlockManager from "@engine/renderer/ModelBlockManager.ts";
 
 export type Color = Color3 | Color4;
 
@@ -69,7 +70,7 @@ export interface ModelRender {
 	size: Vector3;
 	miniBlockScale: number;
 	loadModel: (
-		scene: Scene,
+		modelBlockManager: ModelBlockManager,
 		position: Vector3,
 		material: Material,
 		options?: {

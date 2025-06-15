@@ -28,7 +28,6 @@ import { BlockIconGenerator } from "@engine/block-icon/BlockIconGenerator.ts";
 import { BlockDefinition } from "@engine/types/block.type.ts";
 import { IChunkData } from "@/ui-root/api/interface.ts";
 import { audios } from "@/ui-root/assets/sounds";
-import ModelBlockManager from "@/game-root/block-definitions/ModelBlockManager.ts";
 
 export class Game {
 	public canvas: HTMLCanvasElement;
@@ -100,7 +99,6 @@ export class Game {
 	}
 
 	public dispose() {
-		ModelBlockManager.dispose();
 		this.worker?.terminate();
 		this.gameClient.disConnectAll();
 		this.player.dispose();
@@ -152,7 +150,10 @@ export class Game {
 	}
 
 	private initWorld(setting: IChunkSetting) {
-		const controller = this.voxelEngine.registerChunk(this.getWorldGenerator(), setting);
+		const controller = this.voxelEngine.registerChunk(this.getWorldGenerator(), {
+			...setting,
+			viewDistance: 6,
+		});
 		useWorldStore.setState({ worldController: controller });
 		return controller;
 	}
