@@ -9,6 +9,8 @@ import { ChunkMeshBuilder } from "@engine/renderer/ChunkMeshBuilder.ts";
 import { getCombinedBlocks } from "@/game-root/block-definitions/blocks.ts";
 import { VoxelEngine } from "@engine/core/VoxelEngine.ts";
 import { ChunkData } from "@engine/types/chunk.type.ts";
+import { useWorldStore } from "@/store";
+import { WorldStore } from "@/store/interface.ts";
 
 class VertexBuilder implements IVertexBuilder {
 	private _chunks: Map<string, Chunk> = new Map();
@@ -66,6 +68,10 @@ class VertexBuilder implements IVertexBuilder {
 		const ret = ChunkMeshBuilder.build(context);
 		delete (ret as Partial<MeshBuilderContext>).getBlockAt;
 		return ret;
+	}
+
+	public copyWorldStore(state: WorldStore) {
+		useWorldStore.setState(state);
 	}
 
 	private worldToChunk(x: number, z: number): [number, number, number, number] {

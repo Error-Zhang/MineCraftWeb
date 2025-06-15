@@ -37,13 +37,14 @@ const StartScreen: React.FC<{ hidden: boolean }> = ({ hidden }) => {
 			const sorted = Object.entries(modules).map(([_, mod]) => mod.default);
 			musicListRef.current = sorted;
 		};
-
+		let timer: NodeJS.Timeout;
 		const stop = () => {
 			// 如果已有 audio，先停止释放
 			if (audioRef.current) {
 				audioRef.current.pause();
 				audioRef.current.src = "";
 				audioRef.current = null;
+				clearTimeout(timer);
 			}
 		};
 
@@ -61,8 +62,10 @@ const StartScreen: React.FC<{ hidden: boolean }> = ({ hidden }) => {
 			});
 
 			audio.volume = 0.5;
-			setTimeout(() => {
-				audio.play();
+			timer = setTimeout(() => {
+				if (useGameStore.getState().isGaming) {
+					audio.play();
+				}
 			}, 1000 * 60);
 		};
 

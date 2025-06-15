@@ -21,7 +21,7 @@ const GameCanvas: React.FC<{ canvasRef: RefObject<HTMLCanvasElement> }> = ({ can
 
 	useEffect(() => {
 		const callback = (evt: KeyboardEvent) => {
-			if (evt.key.toLowerCase() === "escape") {
+			if (evt.key.toLowerCase() === "escape" && useGameStore.getState().isGaming) {
 				openGameDialog({
 					title: "暂停",
 					message: "是否要退出世界？",

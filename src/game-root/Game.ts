@@ -144,6 +144,7 @@ export class Game {
 		const VertexBuilderClass = Comlink.wrap<IVertexBuilderConstructor>(this.worker);
 		const vertexBuilder = await new VertexBuilderClass(setting.chunkSize, setting.chunkHeight);
 		await vertexBuilder.addBlocks(this.blockStore.blockTypes!);
+		await vertexBuilder.copyWorldStore(JSON.parse(JSON.stringify(useWorldStore.getState())));
 		this.voxelEngine?.registerMeshBuilder(vertexBuilder.buildMesh.bind(vertexBuilder));
 		return vertexBuilder;
 	}

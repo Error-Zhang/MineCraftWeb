@@ -25,27 +25,31 @@ import { playerApi, worldApi } from "../../../api";
 const WorldManagerMenu: React.FC<{ setPage: (page: ScreenPage) => void }> = ({ setPage }) => {
 	const [worldList, setWorldList] = useState<IWorld[]>([]);
 	const [showDialog, setShowDialog] = useState(false);
-	const [selectedWorld, setSelectedWorld] = useState<IWorld>({} as any);
+	const [selectedWorld, setSelectedWorld] = useState<number>(0);
 	const [showFormPanel, setShowFormPanel] = useState(false);
 	const [isEditing, setIsEditing] = useState(false);
 	const [showPlayerPanel, setShowPlayerPanel] = useState(false);
 	const [worldViewOption, setWorldViewOption] = useState(0);
 	const { userId } = useUserStore();
 
-	const loadWorlds = () => {
-		worldApi.getWorldList().then(setWorldList);
+	const loadWorlds = async () => {
+		const list = await worldApi.getWorldList();
+		setWorldList(list);
+		return list;
 	};
 
-	useEffect(loadWorlds, []);
+	useEffect(() => {
+		loadWorlds();
+	}, []);
 
 	const handleRequestDelete = (world: IWorld) => {
-		setSelectedWorld(world);
+		setSelectedWorld(world.id!);
 		setShowDialog(true);
 	};
 
 	const handleConfirmDelete = async () => {
-		if (selectedWorld?.id) {
-			await worldApi.deleteWorld(selectedWorld.id);
+		if (selectedWorld) {
+			await worldApi.deleteWorld(selectedWorld);
 			setSelectedWorld({} as any);
 			setShowDialog(false);
 			loadWorlds();
@@ -62,9 +66,9 @@ const WorldManagerMenu: React.FC<{ setPage: (page: ScreenPage) => void }> = ({ s
 		loadWorlds();
 	};
 
-	const enterToWorld = async (world: IWorld, enter: boolean = false) => {
+	const enterToWorld = async (world: IWorld) => {
 		const hasPlayer = world.players?.find(player => player.user?.id === userId);
-		if (enter || hasPlayer) {
+		if (hasPlayer) {
 			const player = await playerApi.getPlayer(world.id!);
 			useWorldStore.setState({
 				worldId: world.id!,
@@ -81,7 +85,7 @@ const WorldManagerMenu: React.FC<{ setPage: (page: ScreenPage) => void }> = ({ s
 			});
 			setShowPlayerPanel(false);
 		} else {
-			setSelectedWorld(world);
+			setSelectedWorld(world.id!);
 			setShowPlayerPanel(true);
 		}
 	};
@@ -96,6 +100,10 @@ const WorldManagerMenu: React.FC<{ setPage: (page: ScreenPage) => void }> = ({ s
 				return true;
 		}
 	});
+
+	const getSelectedWorld = (worldId: number, list?: IWorld[]) => {
+		return (list ?? worldList).find(world => world.id === worldId);
+	};
 
 	return (
 		<div className="world-manager">
@@ -136,7 +144,7 @@ const WorldManagerMenu: React.FC<{ setPage: (page: ScreenPage) => void }> = ({ s
 										className="edit-btn"
 										onClick={() => {
 											setIsEditing(true);
-											setSelectedWorld(world);
+											setSelectedWorld(world.id!);
 											setShowFormPanel(true);
 										}}
 									>
@@ -163,7 +171,7 @@ const WorldManagerMenu: React.FC<{ setPage: (page: ScreenPage) => void }> = ({ s
 
 			{showFormPanel && (
 				<WorldFormPanel
-					world={selectedWorld}
+					world={getSelectedWorld(selectedWorld)}
 					onSubmit={handleBack}
 					onCancel={() => setShowFormPanel(false)}
 					isEditing={isEditing}
@@ -171,8 +179,12 @@ const WorldManagerMenu: React.FC<{ setPage: (page: ScreenPage) => void }> = ({ s
 			)}
 			{showPlayerPanel && (
 				<WorldPlayerPanel
-					worldId={selectedWorld.id!}
-					onEnter={() => enterToWorld(selectedWorld, true)}
+					worldId={selectedWorld!}
+					onEnter={() => {
+						loadWorlds().then(list => {
+							enterToWorld(getSelectedWorld(selectedWorld, list)!);
+						});
+					}}
 					onBack={() => setShowPlayerPanel(false)}
 				/>
 			)}
@@ -180,7 +192,7 @@ const WorldManagerMenu: React.FC<{ setPage: (page: ScreenPage) => void }> = ({ s
 				<GameDialog
 					show={showDialog}
 					title="删除世界"
-					message={`确定要删除 "${selectedWorld?.worldName}" 吗？此操作不可恢复。`}
+					message={`确定要删除 "${getSelectedWorld(selectedWorld)?.worldName}" 吗？此操作不可恢复。`}
 					onConfirm={handleConfirmDelete}
 					onCancel={handleCancelDelete}
 				/>
