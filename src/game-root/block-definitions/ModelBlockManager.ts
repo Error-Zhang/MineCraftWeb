@@ -4,8 +4,12 @@ import { BlockMaterialManager } from "@engine/renderer/BlockMaterialManager.ts";
 class ModelBlockManager {
 	static meshes: Map<string, TransformNode> = new Map();
 
+	static dispose(): void {
+		this.meshes.clear();
+	}
+
 	static async loadModel(modelPath: string, scene: Scene, setMesh: Function, options: any) {
-		let key = `${modelPath}-${JSON.stringify(options)}`;
+		let key = `${scene.uid}-${modelPath}-${JSON.stringify(options)}`;
 		if (this.meshes.has(key)) return this.meshes.get(key)!.clone(key, null)!;
 
 		const { meshes } = await ImportMeshAsync(modelPath, scene);

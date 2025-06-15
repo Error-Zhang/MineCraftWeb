@@ -12,7 +12,7 @@ import {
 	RenderMaterial,
 	TransparencyType,
 } from "@engine/types/block.type.ts";
-import ModelBlockManager from "@engine/block/ModelBlockManager.ts";
+import ModelBlockManager from "@/game-root/block-definitions/ModelBlockManager.ts";
 import { blocksUvTable } from "@/game-root/block-definitions/TextureAtlas.ts";
 import { BlockMaterialManager } from "@engine/renderer/BlockMaterialManager.ts";
 import { TAG_GETTERS } from "./BlockTags.ts";
