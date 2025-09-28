@@ -129,7 +129,6 @@ export class BlockMaterialManager extends SingleClass {
 		GLASS: "glass",
 		CROSS: "cross",
 		MODEL: "model",
-		MODEL_COLLIDER: "model_collider",
 		METAL: "metal",
 	} as const;
 	private static materialPresets: Map<string, MaterialConfig> = new Map();
@@ -176,11 +175,6 @@ export class BlockMaterialManager extends SingleClass {
 			backFaceCulling: true,
 			roughness: 1,
 			alphaCutOff: 0.5,
-		});
-
-		// 模型碰撞体材质
-		this.registerMaterialPreset(this.PRESET_MATERIALS.MODEL_COLLIDER, {
-			alpha: 0,
 		});
 
 		// 水材质 - 使用PBR材质模拟

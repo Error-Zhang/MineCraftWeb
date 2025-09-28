@@ -4,11 +4,11 @@ class UVHelper {
 	constructor(
 		private readonly tilesX = 16,
 		private readonly tilesY = 16,
-		private readonly padding = 0.0001
+		private readonly padding = 0.001 // padding过小远处会出现黑边
 	) {}
 
 	/**
-	 * 获取指定贴图块的 UV 向量
+	 * 获取指定贴图块的 UV 向量，从0开始[x,y]
 	 * @param uv
 	 */
 	getUV(uv: [number, number]): Vector4 {
@@ -22,6 +22,14 @@ class UVHelper {
 			(x + 1) * tileSizeX - this.padding,
 			(y + 1) * tileSizeY - this.padding
 		);
+	}
+
+	/**
+	 * 为每个面单独设置，顺序为前后左右上下
+	 * @param uvs
+	 */
+	separate(uvs: [number, number][]): Vector4[] {
+		return uvs.map(uv => this.getUV(uv));
 	}
 
 	/**

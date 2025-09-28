@@ -91,10 +91,10 @@ function createModelRender(
 				mesh.isPickable = false;
 				setMesh?.(mesh);
 			};
-			const model = await modelBlockManager.loadModel(path, setMesh2, options);
+			const model = await modelBlockManager.loadModel(path, setMesh2);
 			model.position = position;
 			model.scaling.scaleInPlace(options?.scale || 1);
-			options?.attachCollider && modelBlockManager.attachCollider(model, size);
+			options?.attachCollider && modelBlockManager.attachCollider(model, offset, size);
 			return model;
 		},
 	};
@@ -249,10 +249,10 @@ export class BlockBuilder {
 
 	asModel(
 		path: string,
-		setMesh?: (mesh: AbstractMesh) => void,
 		offset?: Vector3,
 		size?: Vector3,
-		miniBlockScale?: number
+		miniBlockScale?: number,
+		setMesh?: (mesh: AbstractMesh) => void
 	) {
 		this.block.render = createModelRender(
 			path,

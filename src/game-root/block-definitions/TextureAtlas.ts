@@ -10,7 +10,7 @@ export const blocksUvTable: Record<
 		faceUvs?: Vector4[];
 		stageUvs?: Vector4[];
 		regionUv?: Vector4;
-		modelUvs?: Vector4[];
+		modelUvs?: Vector4[]; // 模型的uv坐标暂时并没有什么实际的作用，因为在模型的内部已经被指定
 	}
 > = {
 	[BlockType.GrassBlock]: {
@@ -141,4 +141,17 @@ export const blocksUvTable: Record<
 	[BlockType.CraftTableBlock]: {
 		modelUvs: [uvHelper.getUV([11, 2])],
 	},
+	[BlockType.FurnaceBlock]: {
+		faceUvs: uvHelper.separate([
+			[14, 2],
+			[12, 2],
+			[12, 2],
+			[12, 2],
+			[12, 2],
+			[12, 2],
+		]),
+	},
+	[BlockType.WoodenDoor]: {},
+	[BlockType.CellDoor]: {},
+	[BlockType.CellTrapdoor]: {},
 };

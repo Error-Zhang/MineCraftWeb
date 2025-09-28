@@ -1,5 +1,4 @@
 import { ImportMeshAsync, MeshBuilder, Scene, TransformNode, Vector3 } from "@babylonjs/core";
-import { BlockMaterialManager } from "@engine/renderer/BlockMaterialManager.ts";
 import { SingleClass } from "@engine/core/Singleton.ts";
 
 class ModelBlockManager extends SingleClass {
@@ -17,10 +16,9 @@ class ModelBlockManager extends SingleClass {
 		this.meshes.clear();
 	}
 
-	async loadModel(modelPath: string, setMesh: Function, options: any) {
-		let key = `${modelPath}-${JSON.stringify(options)}`;
+	async loadModel(modelPath: string, setMesh: Function) {
+		let key = `${modelPath}}`;
 		if (this.meshes.has(key)) return this.meshes.get(key)!.clone(key, null)!;
-
 		const { meshes } = await ImportMeshAsync(modelPath, this.scene);
 		const root = new TransformNode(`${key}_root`, this.scene);
 
@@ -36,24 +34,22 @@ class ModelBlockManager extends SingleClass {
 		return root.clone(key, null)!;
 	}
 
-	attachCollider(node: TransformNode, size: Vector3) {
+	attachCollider(node: TransformNode, offset: Vector3, size: Vector3) {
 		const collider = MeshBuilder.CreateBox(
-			"collider",
+			"block_collider", // 不可更改射线检测时会进行判断
 			{ width: size.x, height: size.y, depth: size.z },
 			this.scene
 		);
 
-		const mat = BlockMaterialManager.Instance.getMaterialByKey(
-			BlockMaterialManager.PRESET_MATERIALS.MODEL_COLLIDER
-		);
+		// 开发时需要
+		collider.visibility = 1;
+		collider.renderingGroupId = 1;
 
-		collider.material = mat;
 		collider.checkCollisions = true;
 		collider.isPickable = true;
-		collider.visibility = 0;
 
 		collider.setParent(node);
-		collider.position = new Vector3(0.5, 0.5, 0.5);
+		collider.position = offset.add(new Vector3(0, 0.5 * size.y, 0));
 	}
 }
 

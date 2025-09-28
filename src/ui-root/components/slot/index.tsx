@@ -52,6 +52,7 @@ const Slot: React.FC<SlotProps> = ({
 			HandSlotController.setHandSlot({ ...slot });
 			onDragStart?.(slot);
 			audios.ItemMoved.play();
+			setIsActive(true);
 		} else {
 			const handSlot = HandSlotController.getHandSlot();
 			if (allowedDropSources.includes(handSlot!.source) || allowedDropSources.includes("all")) {
@@ -82,7 +83,7 @@ const Slot: React.FC<SlotProps> = ({
 		<div
 			title={slot?.displayName || ""}
 			style={{ cursor: slot ? "grab" : "auto" }}
-			className={`slot ${selected ? "selected" : ""} ${isActive ? "splitting" : ""} ${className}`}
+			className={`slot ${selected ? "selected" : ""} ${className}`}
 			onClick={handleClick}
 			onContextMenu={handleRightClick} // 加上右键处理
 		>

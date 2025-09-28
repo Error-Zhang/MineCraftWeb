@@ -6,6 +6,7 @@ import {
 	PointerEventTypes,
 	Scene,
 	StandardMaterial,
+	TransformNode,
 	Vector3,
 } from "@babylonjs/core";
 import { AdvancedDynamicTexture, Control, Rectangle } from "@babylonjs/gui";
@@ -18,19 +19,20 @@ import {
 import MathUtils from "@/game-root/utils/MathUtils.ts";
 import { useGameStore, usePlayerStore, useWorldStore } from "@/store";
 import { PlayerInputSystem } from "@/game-root/player/PlayerInputSystem.ts";
-import { PlayerModel } from "@/game-root/player/PlayerModel.ts";
 import { IBlockActionData } from "@/game-root/client/interface.ts";
 import { BlockMaterialManager } from "@engine/renderer/BlockMaterialManager.ts";
 import { audios } from "@/ui-root/assets/sounds";
+import { PlayerStatus } from "@/game-root/player/PlayerStatus.ts";
 
 export class Player {
-	public playerModel?: PlayerModel;
 	public camera: BasePlayerCamera;
 	// 场景、相机、世界等
-	private scene: Scene;
+	private readonly scene: Scene;
 	private debugHelper: DebugHelper;
 	private maxPlaceDistance = 12; // 最大方块放置距离
 	private placeBlockCallBacks: ((data: IBlockActionData[]) => void)[] = [];
+
+	private status: PlayerStatus;
 
 	constructor(scene: Scene, canvas: HTMLCanvasElement) {
 		this.scene = scene;
@@ -38,6 +40,8 @@ export class Player {
 		const Camera = useGameStore.getState().gameMode ? SurvivalCamera : CreativeCamera;
 
 		this.camera = new Camera(scene, canvas);
+
+		this.status = new PlayerStatus();
 
 		this.addEventListener();
 		this.addCrossHair();
@@ -60,11 +64,6 @@ export class Player {
 
 	public dispose() {
 		this.camera.dispose();
-	}
-
-	public async loadModel(modelPath: string, texturePath: string) {
-		this.playerModel = new PlayerModel(this.scene);
-		return await this.playerModel.loadModel(modelPath, texturePath);
 	}
 
 	public update(dt: number) {
@@ -98,7 +97,10 @@ export class Player {
 		if (!faceNormal) return null;
 
 		const pickedPos = pick.pickedPoint!;
-		const currentBlockPos = this.getCurrentBlockPos(pick?.pickedMesh?.id, pickedPos, faceNormal);
+		const currentBlockPos =
+			pick.pickedMesh!.name === "block_collider"
+				? (pick.pickedMesh!.parent as TransformNode).position
+				: this.getCurrentBlockPos(pick?.pickedMesh?.id, pickedPos, faceNormal);
 
 		return { faceNormal, currentBlockPos };
 	}
@@ -153,39 +155,53 @@ export class Player {
 	}
 
 	private showBlockHoverOutline() {
+		let lastHighlighted: Mesh | null = null;
+
 		// 创建高亮盒子（只创建一次）
-		let highlightBox: Mesh = MeshBuilder.CreateBox("hoverBox", { size: 1 }, this.scene);
+		const highlightBox: Mesh = MeshBuilder.CreateBox("hoverBox", { size: 1 }, this.scene);
 		highlightBox.renderingGroupId = 1;
 		const mat = new StandardMaterial("outlineMat", this.scene);
 		mat.emissiveColor = new Color3(1, 1, 1); // 白色发光
-
 		highlightBox.material = mat;
 		highlightBox.isPickable = false;
 		highlightBox.setEnabled(false); // 初始隐藏
-		highlightBox.enableEdgesRendering(); // 开启边框渲染
+		highlightBox.enableEdgesRendering();
 		highlightBox.edgesWidth = 2;
 		highlightBox.edgesColor = new Color4(1, 1, 1, 1); // 白色边框
-		highlightBox.material.alpha = 0; // 使本体透明
+		highlightBox.material.alpha = 0; // 本体透明
 
 		this.scene.onPointerObservable.add(pointerInfo => {
 			if (pointerInfo.type === PointerEventTypes.POINTERMOVE) {
 				const pickResult = this.camera.getPickInfo(this.maxPlaceDistance);
-				const pickedPoint = pickResult?.pickedPoint;
-				const normal = pickResult?.getNormal();
+				const pickedMesh = pickResult?.pickedMesh as Mesh | null;
 
-				if (pickedPoint && normal) {
-					// 转换为整数网格坐标（向下取整）
-					const currentPos = this.getCurrentBlockPos(
-						pickResult?.pickedMesh?.id!,
-						pickedPoint,
-						normal
-					);
+				// 如果和上一次相同，不重复处理
+				if (pickedMesh === lastHighlighted) return;
 
-					// 将 highlightBox 移动到方块中心位置
-					highlightBox.position.set(currentPos.x + 0.5, currentPos.y + 0.5, currentPos.z + 0.5);
-					highlightBox.setEnabled(true);
-				} else {
-					highlightBox.setEnabled(false); // 没有拾取到方块，隐藏高亮框
+				// 先清理上一次高亮
+				if (lastHighlighted) {
+					lastHighlighted.disableEdgesRendering();
+					lastHighlighted = null;
+				}
+				highlightBox.setEnabled(false);
+
+				if (pickedMesh) {
+					if (pickedMesh.name === "block_collider") {
+						// 高亮 collider 边框
+						pickedMesh.enableEdgesRendering();
+						pickedMesh.edgesWidth = 2;
+						pickedMesh.edgesColor = new Color4(1, 1, 1, 1);
+						lastHighlighted = pickedMesh;
+					} else {
+						// 非 collider → 使用高亮盒子
+						const pickedPoint = pickResult?.pickedPoint;
+						const normal = pickResult?.getNormal();
+						if (pickedPoint && normal) {
+							const currentPos = this.getCurrentBlockPos(pickedMesh.id, pickedPoint, normal);
+							highlightBox.position.set(currentPos.x + 0.5, currentPos.y + 0.5, currentPos.z + 0.5);
+							highlightBox.setEnabled(true);
+						}
+					}
 				}
 			}
 		});

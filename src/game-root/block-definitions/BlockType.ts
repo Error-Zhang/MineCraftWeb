@@ -48,6 +48,10 @@ enum BlockType {
 
 	OakPlankBlock, // 橡木木板
 	CraftTableBlock, // 工作台
+	FurnaceBlock,
+	WoodenDoor,
+	CellDoor,
+	CellTrapdoor,
 }
 
 export default BlockType;

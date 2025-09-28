@@ -63,7 +63,11 @@ export class GameTime extends SingleClass {
 	/** 更新游戏时间 */
 	public update(deltaTime: number) {
 		const gameSecondsPerRealSecond = this.GAME_SECONDS_PER_DAY / this.realSecondsPerDay;
-		this._totalGameSeconds += deltaTime * gameSecondsPerRealSecond;
+
+		// 如果是夜晚，时间流速加倍
+		const speedMultiplier = this.isDaytime ? 1 : 2;
+
+		this._totalGameSeconds += deltaTime * gameSecondsPerRealSecond * speedMultiplier;
 	}
 
 	/** 设置当前游戏总时间 */

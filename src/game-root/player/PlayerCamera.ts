@@ -34,14 +34,6 @@ export abstract class BasePlayerCamera {
 		this.bindInput();
 	}
 
-	public get root() {
-		return this.camera;
-	}
-
-	public get position(): Vector3 {
-		return this.camera.position;
-	}
-
 	public dispose() {
 		this.camera.detachControl();
 		this.camera.dispose();

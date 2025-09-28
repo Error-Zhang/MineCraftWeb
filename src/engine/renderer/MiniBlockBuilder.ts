@@ -29,14 +29,17 @@ export class MiniBlockBuilder extends SingleClass {
 	private offset: Vector3 = new Vector3(0.5, 0.5, 0.5);
 	private shapes: Map<string, PhysicsShape> = new Map<string, PhysicsShape>();
 	private blockMaterialManager: BlockMaterialManager;
+	private modelBlockManager: ModelBlockManager;
 
 	constructor(
 		private scene: Scene,
 		blockMaterialManager?: BlockMaterialManager,
+		modelBlockManager?: ModelBlockManager,
 		public usePhysics: boolean = true
 	) {
 		super();
 		this.blockMaterialManager = blockMaterialManager ?? BlockMaterialManager.Instance;
+		this.modelBlockManager = modelBlockManager ?? ModelBlockManager.Instance;
 	}
 
 	public static get Instance(): MiniBlockBuilder {
@@ -303,7 +306,7 @@ export class MiniBlockBuilder extends SingleClass {
 	) {
 		scale = scale ?? render.miniBlockScale;
 		const model = await render.loadModel(
-			ModelBlockManager.Instance,
+			this.modelBlockManager,
 			position,
 			this.blockMaterialManager.getMaterialByKey(render.matKey),
 			{ scale }

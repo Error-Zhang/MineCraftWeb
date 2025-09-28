@@ -25,7 +25,7 @@ export class Environment extends SingleClass {
 	public shadowGenerator?: ShadowGenerator;
 
 	/** 每隔多少"游戏分钟"更新一次光照 */
-	public updateIntervalMinutes = 60;
+	public updateIntervalMinutes = 5;
 	public intensity = 2;
 	private readonly scene: Scene;
 	private skyBox!: Mesh;
