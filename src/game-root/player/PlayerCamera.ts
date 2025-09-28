@@ -40,10 +40,7 @@ export abstract class BasePlayerCamera {
 	}
 
 	public getYawPitch() {
-		const yaw = this.camera.rotation.y;
-		const pitch = this.camera.rotation.x;
-
-		return [yaw, pitch] as const;
+		return [this.camera.rotation.y, this.camera.rotation.x] as const;
 	}
 
 	public detectCameraChanges() {
@@ -55,21 +52,21 @@ export abstract class BasePlayerCamera {
 			Math.abs(yaw - this.cameraState.lastYaw) > value ||
 			Math.abs(pitch - this.cameraState.lastPitch) > value;
 
-		if (moved) this.cameraState.lastPosition.copyFrom(currentPosition);
+		if (moved) {
+			this.cameraState.lastPosition.copyFrom(currentPosition);
+			playerEvents.emit("playerTranslated", {
+				x: currentPosition.x,
+				y: currentPosition.y,
+				z: currentPosition.z,
+			});
+		}
 		if (turned) {
 			this.cameraState.lastYaw = yaw;
 			this.cameraState.lastPitch = pitch;
-		}
-
-		if (moved || turned) {
-			playerEvents.emit(
-				"playerMoved",
-				{ x: currentPosition.x, y: currentPosition.y, z: currentPosition.z },
-				{
-					yaw,
-					pitch,
-				}
-			);
+			playerEvents.emit("playerRotated", {
+				yaw,
+				pitch,
+			});
 		}
 	}
 

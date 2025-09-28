@@ -8,22 +8,21 @@ import {
 	Vector3,
 } from "@babylonjs/core";
 
+type PartName = "body" | "head" | "hand1" | "hand2" | "leg1" | "leg2";
+
 export class PlayerModel {
 	public root!: AbstractMesh;
 	public parts: Record<
-		"body" | "head" | "leftLeg" | "rightLeg" | "leftArm" | "rightArm",
-		AbstractMesh
+		PartName,
+		{
+			mesh: AbstractMesh;
+			dfAngle: Vector3;
+			targetAngleX: number;
+		}
 	> = {} as any;
 	private walkTime = 0;
-	private bodyYaw: number = 0;
+	private bodyYaw: number = Math.PI / 2;
 	private isWalking = false;
-	private targetAngles: Record<string, number> = {
-		leftArm: 0,
-		rightArm: 0,
-		leftLeg: 0,
-		rightLeg: 0,
-	};
-	private readonly TRANSITION_SPEED = 0.1; // 过渡速度
 
 	constructor(private scene: Scene) {}
 
@@ -39,49 +38,31 @@ export class PlayerModel {
 			const texture = new Texture(skinUrl, this.scene);
 			texture.vScale = -1;
 			(<PBRMaterial>mesh.material).albedoTexture = texture;
-
 			// 收集子部件（用名称识别）
-			const name = mesh.name.toLowerCase();
-			switch (name) {
-				case "node2":
-					this.parts.body = mesh;
-					break;
-				case "node6":
-					this.parts.head = mesh;
-					mesh.setPivotPoint(new Vector3(0, 1.5, 0));
-					break;
-				case "node10":
-					this.parts.leftLeg = mesh;
-					mesh.setPivotPoint(new Vector3(0, 0.7, 0));
-					break;
-				case "node8":
-					this.parts.rightLeg = mesh;
-					mesh.setPivotPoint(new Vector3(0, 0.7, 0));
-					break;
-				case "node4":
-					this.parts.leftArm = mesh;
-					mesh.setPivotPoint(new Vector3(0, 1.3, 0));
-					break;
-				case "node12":
-					this.parts.rightArm = mesh;
-					mesh.setPivotPoint(new Vector3(0, 1.3, 0));
-					break;
-			}
+			const name = mesh.name.toLowerCase() as PartName;
+			const cloneAngle = mesh.rotationQuaternion!.toEulerAngles().clone();
+			this.parts[name] = {
+				mesh,
+				dfAngle: cloneAngle,
+				targetAngleX: 0,
+			};
 		});
 		this.root = root;
 		this.registerWalkingAnimation();
 		return root;
 	}
 
-	public lookYawPitch(yaw: number, pitch: number) {
-		// 头部旋转
-		this.parts.head.rotationQuaternion = Quaternion.FromEulerAngles(-pitch, -yaw + this.bodyYaw, 0);
+	public lookYawPitch(pitch: number, yaw: number) {
+		// 头部旋转：Yaw(绕Y) + Pitch(绕X)
+		this.parts.head.mesh.rotationQuaternion = Quaternion.FromEulerVector(
+			this.parts.head.dfAngle.add(new Vector3(-pitch, -yaw + this.bodyYaw, 0))
+		);
 
 		// 如果头部与身体偏差过大（比如超过 45°），身体慢慢转过去
 		const yawDiff = yaw - this.bodyYaw;
-		if (Math.abs(yawDiff) > Math.PI / 4) {
+		if (Math.abs(yawDiff) > Math.PI / 6) {
 			// 插值或直接调整身体方向
-			this.bodyYaw += yawDiff * 0.1; // 0.1 是平滑系数
+			this.bodyYaw += yawDiff * 0.2; // 0.1 是平滑系数
 		}
 
 		// 应用身体旋转
@@ -100,13 +81,11 @@ export class PlayerModel {
 
 	public stopWalking() {
 		this.isWalking = false;
-		// 设置目标角度为0，让动画系统平滑过渡
-		this.targetAngles = {
-			leftArm: 0,
-			rightArm: 0,
-			leftLeg: 0,
-			rightLeg: 0,
-		};
+		console.log("stop walking");
+		// 重置目标角度，让动画系统平滑过渡
+		Object.values(this.parts).forEach(part => {
+			part.targetAngleX = 0;
+		});
 	}
 
 	// 动画回调函数
@@ -114,25 +93,28 @@ export class PlayerModel {
 		if (this.isWalking) {
 			const targetAngle = Math.sin(this.walkTime) * 0.8;
 			this.walkTime += 0.1;
-
-			this.targetAngles = {
-				leftArm: targetAngle,
-				rightArm: -targetAngle,
-				leftLeg: targetAngle,
-				rightLeg: -targetAngle,
-			};
+			this.parts.hand1.targetAngleX = targetAngle;
+			this.parts.hand2.targetAngleX = -targetAngle;
+			this.parts.leg1.targetAngleX = -targetAngle;
+			this.parts.leg2.targetAngleX = targetAngle;
 		}
 
 		// 平滑过渡到目标角度
-		const updateLimb = (mesh: AbstractMesh, targetAngle: number) => {
-			const currentAngle = mesh.rotationQuaternion ? mesh.rotationQuaternion.toEulerAngles().x : 0;
-			const newAngle = currentAngle + (targetAngle - currentAngle) * this.TRANSITION_SPEED;
-			mesh.rotationQuaternion = Quaternion.FromEulerAngles(newAngle, 0, 0);
+		const updateLimb = ({
+			mesh,
+			dfAngle,
+			targetAngleX,
+		}: {
+			mesh: AbstractMesh;
+			dfAngle: Vector3;
+			targetAngleX: number;
+		}) => {
+			mesh.rotationQuaternion = Quaternion.FromEulerAngles(dfAngle.x + targetAngleX, 0, 0);
 		};
 
-		updateLimb(this.parts.leftArm, this.targetAngles.leftArm);
-		updateLimb(this.parts.rightArm, this.targetAngles.rightArm);
-		updateLimb(this.parts.leftLeg, this.targetAngles.leftLeg);
-		updateLimb(this.parts.rightLeg, this.targetAngles.rightLeg);
+		updateLimb(this.parts.hand1);
+		updateLimb(this.parts.hand2);
+		updateLimb(this.parts.leg1);
+		updateLimb(this.parts.leg2);
 	}
 }

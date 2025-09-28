@@ -18,6 +18,19 @@ export interface IPlayerMoveData {
 	pitch: number;
 }
 
+export interface IPlayerTranslateData {
+	playerId: number;
+	x: number;
+	y: number;
+	z: number;
+}
+
+export interface IPlayerRotateData {
+	playerId: number;
+	yaw: number;
+	pitch: number;
+}
+
 export interface IBlockActionData {
 	playerId?: number;
 	blockId: number;

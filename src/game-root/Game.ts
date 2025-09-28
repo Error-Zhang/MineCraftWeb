@@ -28,6 +28,8 @@ import { BlockIconGenerator } from "@engine/block-icon/BlockIconGenerator.ts";
 import { BlockDefinition } from "@engine/types/block.type.ts";
 import { IChunkData } from "@/ui-root/api/interface.ts";
 import { audios } from "@/ui-root/assets/sounds";
+import { AnimalSystem } from "@/game-root/animals/AnimalSystem.ts";
+import { IAnimalSpawnData } from "@/game-root/client/AnimalClient.ts";
 
 export class Game {
 	public canvas: HTMLCanvasElement;
@@ -36,6 +38,10 @@ export class Game {
 	private player!: Player;
 	private gameClient: GameClient = new GameClient();
 	private npcPlayers = new Map<number, NpcPlayer>();
+	private animalSystem?: AnimalSystem;
+	private seedNearPlayer = throttle((x: number, z: number) => {
+		this.gameClient.animalClient.seedSpawn(Math.floor(x), Math.floor(z), 4).catch(() => {});
+	}, 5000);
 	private worker?: Worker;
 	private vertexBuilder?: Comlink.Remote<IVertexBuilder>;
 	private screen?: LoadingScreen;
@@ -87,6 +93,8 @@ export class Game {
 		this.player = new Player(this.scene, this.canvas);
 		this.setupEvents(worldController);
 
+		await this.setupAnimals(worldController);
+
 		this.voxelEngine.onUpdate(() => {
 			const dt = this.voxelEngine.engine.getDeltaTime();
 			this.player.update(dt);
@@ -107,6 +115,7 @@ export class Game {
 		this.playerStore.reset();
 		this.npcPlayers.forEach(p => p.dispose());
 		this.npcPlayers.clear();
+		this.animalSystem?.dispose();
 		playerEvents.removeAllListeners();
 		this.unsubscribes.forEach(unsubscribe => unsubscribe());
 		this.unsubscribes.length = 0;
@@ -116,6 +125,27 @@ export class Game {
 	public destroy() {
 		this.dispose();
 		GameWindow.Instance.dispose();
+	}
+
+	private async setupAnimals(world: WorldController) {
+		this.animalSystem = new AnimalSystem(this.scene);
+		const ac = this.gameClient.animalClient;
+		ac.onAnimalSpawn(async (data: IAnimalSpawnData) => {
+			const ent = await this.animalSystem!.spawn(data);
+			console.log(ent);
+			if (ent.model) this.voxelEngine.addMesh(ent.model);
+		});
+		ac.onAnimalMove(moves => this.animalSystem!.onMoves(moves));
+		const snapshot = await ac.getAnimals();
+		const spawned = await this.animalSystem.loadSnapshot(snapshot);
+		for (const ent of spawned) {
+			if (ent.model) this.voxelEngine.addMesh(ent.model);
+		}
+		const [cx, cy, cz] = this.worldStore.worldController!.getChunkCenterTop(
+			this.playerStore.origin.x,
+			this.playerStore.origin.z
+		);
+		await ac.seedSpawn(Math.floor(cx), Math.floor(cz), 10);
 	}
 
 	private async generateBlockIcons(blocks: BlockDefinition<any>[]) {
@@ -189,7 +219,7 @@ export class Game {
 				this.gameClient.playerClient.getPlayerPosition(playerId).then(pos => {
 					if (pos) {
 						npc.setPosition(pos.x, pos.y, pos.z);
-						npc.setRotation(pos.yaw, pos.pitch);
+						npc.setRotation(pos.pitch, pos.yaw);
 					} else this.setupPlayerPosition(npc.setPosition.bind(npc));
 				});
 			});
@@ -204,10 +234,12 @@ export class Game {
 			placer.update();
 		});
 		client.onPlayerJoined(id => this.spawnNPC(id));
-		client.onPlayerMove(({ playerId, x, y, z, pitch, yaw }) => {
-			const p = this.npcPlayers.get(playerId);
-			p?.moveTo(x, y, z);
-			p?.setRotation(yaw, pitch);
+		client.onPlayerTranslate(({ playerId, x, y, z }) => {
+			console.log("move");
+			this.npcPlayers.get(playerId)?.moveTo(x, y, z);
+		});
+		client.onPlayerRotate(({ playerId, pitch, yaw }) => {
+			this.npcPlayers.get(playerId)?.setRotation(pitch, yaw);
 		});
 		client.onPlayerLeave(id => this.npcPlayers.get(id)?.dispose());
 
@@ -218,13 +250,25 @@ export class Game {
 		this.player.onPlaceBlock(client.sendPlaceBlock.bind(client));
 
 		playerEvents.on(
-			"playerMoved",
-			throttle((pos, rot) => {
+			"playerTranslated",
+			throttle(pos => {
 				world.updateChunk(pos);
-				client.sendPlayerMove({
+				client.sendPlayerTranslate({
 					playerId: this.playerStore.playerId,
-					...pos,
-					...rot,
+					x: pos.x,
+					y: pos.y,
+					z: pos.z,
+				});
+				this.seedNearPlayer(pos.x, pos.z);
+			}, 100)
+		);
+		playerEvents.on(
+			"playerRotated",
+			throttle(rot => {
+				client.sendPlayerRotate({
+					playerId: this.playerStore.playerId,
+					yaw: rot.yaw,
+					pitch: rot.pitch,
 				});
 			}, 100)
 		);

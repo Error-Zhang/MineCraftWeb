@@ -1,5 +1,6 @@
 import { ImportMeshAsync, MeshBuilder, Scene, TransformNode, Vector3 } from "@babylonjs/core";
 import { SingleClass } from "@engine/core/Singleton.ts";
+import { BlockMaterialManager } from "@engine/renderer/BlockMaterialManager.ts";
 
 class ModelBlockManager extends SingleClass {
 	meshes: Map<string, TransformNode> = new Map();
@@ -41,6 +42,12 @@ class ModelBlockManager extends SingleClass {
 			this.scene
 		);
 
+		// 模型淡入淡出效果的需要
+		const mat = BlockMaterialManager.Instance.getMaterialByKey(
+			BlockMaterialManager.PRESET_MATERIALS.MODEL_COLLIDER
+		);
+
+		collider.material = mat;
 		// 开发时需要
 		collider.visibility = 1;
 		collider.renderingGroupId = 1;

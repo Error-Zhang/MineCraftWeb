@@ -54,6 +54,7 @@ export class ChunkRenderer {
 	}
 
 	public async buildChunk(filter: Set<string> = this.renderedBlocks) {
+		if (!BlockMaterialManager.Instance) return;
 		const { mergeGroups, modelBlocks, renderedBlocks } = await WorldRenderer.Instance.buildMesh(
 			this.chunk.position,
 			this.chunk.edges,

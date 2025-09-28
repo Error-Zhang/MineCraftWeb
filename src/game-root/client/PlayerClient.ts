@@ -1,6 +1,12 @@
 // PlayerClient.ts
 import * as signalR from "@microsoft/signalr";
-import { ApiResponse, IBlockActionData, IPlayerMoveData } from "@/game-root/client/interface.ts";
+import {
+	ApiResponse,
+	IBlockActionData,
+	IPlayerMoveData,
+	IPlayerRotateData,
+	IPlayerTranslateData,
+} from "@/game-root/client/interface.ts";
 import { WorldClient } from "@/game-root/client/WorldClient.ts";
 
 export class PlayerClient {
@@ -32,6 +38,14 @@ export class PlayerClient {
 		await this.connection.invoke("PlayerMove", data);
 	}
 
+	async sendPlayerTranslate(data: IPlayerTranslateData) {
+		await this.connection.invoke("PlayerTranslate", data);
+	}
+
+	async sendPlayerRotate(data: IPlayerRotateData) {
+		await this.connection.invoke("PlayerRotate", data);
+	}
+
 	async sendPlaceBlock(data: IBlockActionData[]) {
 		await this.worldClient.setBlock(data);
 		await this.connection.invoke("PlaceBlock", data);
@@ -39,6 +53,16 @@ export class PlayerClient {
 
 	onPlayerMove(callback: (data: IPlayerMoveData) => void) {
 		this.safeOn("PlayerMove", callback);
+	}
+
+	// 仅位置变化
+	onPlayerTranslate(callback: (data: IPlayerTranslateData) => void) {
+		this.safeOn("PlayerTranslate", callback);
+	}
+
+	// 仅旋转变化
+	onPlayerRotate(callback: (data: IPlayerRotateData) => void) {
+		this.safeOn("PlayerRotate", callback);
 	}
 
 	onPlaceBlock(callback: (data: IBlockActionData[]) => void) {

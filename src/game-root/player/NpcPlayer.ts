@@ -4,6 +4,7 @@ import { PlayerModel } from "@/game-root/player/PlayerModel.ts";
 export class NpcPlayer {
 	public model?: AbstractMesh;
 	private playerModel?: PlayerModel;
+	private timer: any = null;
 
 	constructor(
 		public scene: Scene,
@@ -30,7 +31,7 @@ export class NpcPlayer {
 		if (currentPosition.equals(targetPosition)) return;
 
 		// 创建位置动画
-		const frameRate = 60;
+		const frameRate = 6;
 		const duration = 0.1; // 动画持续时间（秒）
 
 		const positionAnimation = new Animation(
@@ -53,9 +54,6 @@ export class NpcPlayer {
 
 		positionAnimation.setKeys(keyFrames);
 
-		// 停止之前的动画
-		this.scene.stopAnimation(this.model);
-
 		// 开始新的动画
 		this.scene.beginDirectAnimation(
 			this.model,
@@ -65,15 +63,17 @@ export class NpcPlayer {
 			false,
 			1,
 			() => {
-				// 停止行走动画
-				this.playerModel?.stopWalking();
+				clearTimeout(this.timer);
+				this.timer = setTimeout(() => {
+					this.playerModel?.stopWalking();
+				}, 150);
 			}
 		);
 		this.playerModel?.startWalking();
 	}
 
-	public setRotation(yaw: number, pitch: number) {
-		this.playerModel?.lookYawPitch(yaw, pitch);
+	public setRotation(pitch: number, yaw: number) {
+		this.playerModel?.lookYawPitch(pitch, yaw);
 	}
 
 	public dispose() {
