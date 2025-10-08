@@ -2,6 +2,7 @@ import { WorldController } from "@engine/core/WorldController.ts";
 import { BlockRegistry } from "@engine/block/BlockRegistry.ts";
 import { IBlockReflect } from "@/ui-root/api/interface.ts";
 import { BlockRecipe } from "@/game-root/block-definitions/BlockRecipes.ts";
+import { IChunkSetting } from "@/game-root/client/interface.ts";
 
 export interface UserStore {
 	userId: number;
@@ -31,6 +32,7 @@ export interface WorldStore {
 	worldMode: number;
 	season: number;
 	worldController: WorldController | null;
+	chunkSetting: IChunkSetting | null;
 	reset: () => void;
 }
 

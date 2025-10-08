@@ -1,5 +1,62 @@
 import blockTextureAtlas from "./textures/Blocks.webp";
-import HumanMaleTexture1 from "./textures/HumanMale1.webp";
+import HumanMaleTexture1 from "./textures/creatures/HumanMale1.webp";
+
+/* 动物纹理 */
+// 牛
+import Cow_Black from "./textures/creatures/Cow_Black.webp";
+import Cow_Brown from "./textures/creatures/Cow_Brown.webp";
+// 熊
+import Bear_Black from "./textures/creatures/Bear_Black.webp";
+import Bear_Brown from "./textures/creatures/Bear_Brown.webp";
+import Bear_Polar from "./textures/creatures/Bear_Polar.webp";
+// 马
+import Horse_Bay from "./textures/creatures/Horse_Bay.webp";
+import Horse_Black from "./textures/creatures/Horse_Black.webp";
+import Horse_Chestnut from "./textures/creatures/Horse_Chestnut.webp";
+import Horse_Palomino from "./textures/creatures/Horse_Palomino.webp";
+import Horse_White from "./textures/creatures/Horse_White.webp";
+// 狼
+import Wolf_Gray from "./textures/creatures/Wolf_Gray.webp";
+import Wolf_Coyote from "./textures/creatures/Wolf_Coyote.webp";
+// 老虎
+import Tiger_Normal from "./textures/creatures/Tiger.webp";
+import Tiger_White from "./textures/creatures/Tiger_White.webp";
+// 鲨鱼
+import Shark_Bull_Texture from "./textures/creatures/Shark_Bull.webp";
+import Shark_GreatWhite_Texture from "./textures/creatures/Shark_GreatWhite.webp";
+import Shark_Tiger_Texture from "./textures/creatures/Shark_Tiger.webp";
+// 其他动物
+import Donkey_Texture from "./textures/creatures/Donkey.webp";
+import Camel_Texture from "./textures/creatures/Camel.webp";
+import Bison_Texture from "./textures/creatures/Bison.webp";
+import Zebra_Texture from "./textures/creatures/Zebra.webp";
+import Lion_Texture from "./textures/creatures/Lion.webp";
+import Leopard_Texture from "./textures/creatures/Leopard.webp";
+import Jaguar_Texture from "./textures/creatures/Jaguar.webp";
+import Hyena_Texture from "./textures/creatures/Hyena.webp";
+import Wildboar_Texture from "./textures/creatures/Wildboar.webp";
+import Giraffe_Texture from "./textures/creatures/Giraffe.webp";
+import Rhino_Texture from "./textures/creatures/Rhino.webp";
+import Moose_Texture from "./textures/creatures/Moose.webp";
+import Reindeer_Texture from "./textures/creatures/Reindeer.webp";
+// 鸟类
+import Sparrow_Texture from "./textures/creatures/Sparrow.webp";
+import Raven_Texture from "./textures/creatures/Raven.webp";
+import Seagull_Texture from "./textures/creatures/Seagull.webp";
+import Pigeon_Texture from "./textures/creatures/Pigeon.webp";
+import Cassowary_Texture from "./textures/creatures/Cassowary.webp";
+import Ostrich_Texture from "./textures/creatures/Ostrich.webp";
+import Duck_Texture from "./textures/creatures/Duck.webp";
+// 海洋生物
+import Bass_Freshwater from "./textures/creatures/Bass_Freshwater.webp";
+import Bass_Sea from "./textures/creatures/Bass_Sea.webp";
+import Barracuda_Texture from "./textures/creatures/Barracuda.webp";
+import Piranha_Texture from "./textures/creatures/Piranha.webp";
+import Orca_Texture from "./textures/creatures/Orca.webp";
+import Beluga_Texture from "./textures/creatures/Beluga.webp";
+import Ray_Brown from "./textures/creatures/Ray_Brown.webp";
+import Ray_Yellow from "./textures/creatures/Ray_Yellow.webp";
+import Werewolf_Texture from "./textures/creatures/Werewolf.webp";
 
 /* 方块 / 建筑 */
 import Cactus from "./models/Cactus.glb"; // 仙人掌
@@ -249,7 +306,8 @@ const Assets = {
 		},
 	},
 	animals: {
-		land: {
+		models: {
+			// 陆地
 			Cow, // 牛
 			Donkey, // 驴
 			Horse, // 马
@@ -270,8 +328,8 @@ const Assets = {
 			Rhino, // 犀牛
 			Moose, // 驼鹿
 			Reindeer, // 驯鹿
-		},
-		birds: {
+
+			// 鸟类
 			Sparrow, // 麻雀
 			Raven, // 乌鸦
 			Seagull, // 海鸥
@@ -280,8 +338,8 @@ const Assets = {
 			Cassowary, // 食火鸡
 			Ostrich, // 鸵鸟
 			Duck, // 鸭子
-		},
-		sea: {
+
+			// 鱼类
 			Fish, // 鱼
 			Bass, // 鲈鱼
 			Barracuda, // 梭子鱼
@@ -294,10 +352,68 @@ const Assets = {
 			Shark_Tiger, // 虎鲨
 			Starfish, // 海星
 			SeaUrchin, // 海胆
+
+			// 怪物
+			Werewolf, // 狼人
 		},
 
-		special: {
-			Werewolf, // 狼人
+		textures: {
+			// 牛的纹理变体
+			Cow_Black,
+			Cow_Brown,
+			// 熊的纹理变体
+			Bear_Black,
+			Bear_Brown,
+			Bear_Polar,
+			// 马的纹理变体
+			Horse_Bay,
+			Horse_Black,
+			Horse_Chestnut,
+			Horse_Palomino,
+			Horse_White,
+			// 狼的纹理变体
+			Wolf_Gray,
+			Wolf_Coyote,
+			// 老虎的纹理变体
+			Tiger_Normal,
+			Tiger_White,
+			// 鲨鱼的纹理变体
+			Shark_Bull: Shark_Bull_Texture,
+			Shark_GreatWhite: Shark_GreatWhite_Texture,
+			Shark_Tiger: Shark_Tiger_Texture,
+			// 其他动物纹理
+			Donkey: Donkey_Texture,
+			Camel: Camel_Texture,
+			Bison: Bison_Texture,
+			Zebra: Zebra_Texture,
+			Lion: Lion_Texture,
+			Leopard: Leopard_Texture,
+			Jaguar: Jaguar_Texture,
+			Hyena: Hyena_Texture,
+			Wildboar: Wildboar_Texture,
+			Giraffe: Giraffe_Texture,
+			Rhino: Rhino_Texture,
+			Moose: Moose_Texture,
+			Reindeer: Reindeer_Texture,
+			// 鸟类纹理
+			Sparrow: Sparrow_Texture,
+			Raven: Raven_Texture,
+			Seagull: Seagull_Texture,
+			Pigeon: Pigeon_Texture,
+			Cassowary: Cassowary_Texture,
+			Ostrich: Ostrich_Texture,
+			Duck: Duck_Texture,
+			// 海洋生物纹理
+			Bass_Freshwater,
+			Bass_Sea,
+			Barracuda: Barracuda_Texture,
+			Piranha: Piranha_Texture,
+			Orca: Orca_Texture,
+			Beluga: Beluga_Texture,
+			Ray_Brown,
+			Ray_Yellow,
+			// 特殊生物纹理
+			Werewolf: Werewolf_Texture,
 		},
 	},
 };

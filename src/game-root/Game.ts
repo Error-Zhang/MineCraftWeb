@@ -2,7 +2,7 @@ import { Scene } from "@babylonjs/core";
 import { AdvancedDynamicTexture, TextBlock } from "@babylonjs/gui";
 import { throttle } from "@/game-root/utils/lodash.ts";
 import { VoxelEngine } from "@engine/core/VoxelEngine.ts";
-import { Coords } from "@engine/types/chunk.type.ts";
+import { Coords, Position } from "@engine/types/chunk.type.ts";
 import { Chunk } from "@engine/chunk/Chunk.ts";
 import { getCombinedBlocks } from "@/game-root/block-definitions/blocks.ts";
 import Assets from "@/game-root/assets";
@@ -28,8 +28,7 @@ import { BlockIconGenerator } from "@engine/block-icon/BlockIconGenerator.ts";
 import { BlockDefinition } from "@engine/types/block.type.ts";
 import { IChunkData } from "@/ui-root/api/interface.ts";
 import { audios } from "@/ui-root/assets/sounds";
-import { AnimalSystem } from "@/game-root/animals/AnimalSystem.ts";
-import { IAnimalSpawnData } from "@/game-root/client/AnimalClient.ts";
+import { SimpleAnimalSystem } from "@/game-root/animals/SimpleAnimalSystem";
 
 export class Game {
 	public canvas: HTMLCanvasElement;
@@ -38,10 +37,7 @@ export class Game {
 	private player!: Player;
 	private gameClient: GameClient = new GameClient();
 	private npcPlayers = new Map<number, NpcPlayer>();
-	private animalSystem?: AnimalSystem;
-	private seedNearPlayer = throttle((x: number, z: number) => {
-		this.gameClient.animalClient.seedSpawn(Math.floor(x), Math.floor(z), 4).catch(() => {});
-	}, 5000);
+	private animalSystem?: SimpleAnimalSystem;
 	private worker?: Worker;
 	private vertexBuilder?: Comlink.Remote<IVertexBuilder>;
 	private screen?: LoadingScreen;
@@ -127,25 +123,50 @@ export class Game {
 		GameWindow.Instance.dispose();
 	}
 
-	private async setupAnimals(world: WorldController) {
-		this.animalSystem = new AnimalSystem(this.scene);
-		const ac = this.gameClient.animalClient;
-		ac.onAnimalSpawn(async (data: IAnimalSpawnData) => {
-			const ent = await this.animalSystem!.spawn(data);
-			console.log(ent);
-			if (ent.model) this.voxelEngine.addMesh(ent.model);
+	private async setupAnimals(worldController: WorldController) {
+		const animalClient = this.gameClient.animalClient;
+
+		// 初始化动物系统
+		this.animalSystem = new SimpleAnimalSystem(this.scene, {
+			onRequestChunkAnimals: async (chunkX: number, chunkZ: number) => {
+				return await animalClient.getChunkAnimals(chunkX, chunkZ);
+			},
+			onBroadcastBehavior: (animalId: number, behaviorType: string, target, seed: number) => {
+				animalClient.broadcastBehavior(animalId, behaviorType, target.x, target.y, target.z, seed);
+			},
+			onSyncPositions: positions => {
+				animalClient.syncPositions(positions);
+			},
 		});
-		ac.onAnimalMove(moves => this.animalSystem!.onMoves(moves));
-		const snapshot = await ac.getAnimals();
-		const spawned = await this.animalSystem.loadSnapshot(snapshot);
-		for (const ent of spawned) {
-			if (ent.model) this.voxelEngine.addMesh(ent.model);
-		}
-		const [cx, cy, cz] = this.worldStore.worldController!.getChunkCenterTop(
-			this.playerStore.origin.x,
-			this.playerStore.origin.z
-		);
-		await ac.seedSpawn(Math.floor(cx), Math.floor(cz), 10);
+
+		// 监听网络事件
+		animalClient.onAnimalBehavior(event => {
+			this.animalSystem!.handleBehaviorEvent(
+				event.animalId,
+				event.behaviorType,
+				event.targetX,
+				event.targetY,
+				event.targetZ,
+				event.randomSeed
+			);
+		});
+
+		animalClient.onAnimalPositionSync(sync => {
+			this.animalSystem!.handlePositionSync(sync.animalId, sync.x, sync.y, sync.z);
+		});
+
+		animalClient.onAnimalPositionsSync(syncs => {
+			this.animalSystem!.handlePositionsSync(syncs);
+		});
+
+		// 在主更新循环中更新动物系统
+		this.voxelEngine.onUpdate(() => {
+			const dt = this.voxelEngine.engine.getDeltaTime();
+			const playerPos = (this.player.camera as any).camera.position; // 获取相机位置
+			this.animalSystem!.update(dt, playerPos);
+		});
+
+		console.log("[Game] Animal system initialized");
 	}
 
 	private async generateBlockIcons(blocks: BlockDefinition<any>[]) {
@@ -185,6 +206,7 @@ export class Game {
 			viewDistance: 6,
 		});
 		useWorldStore.setState({ worldController: controller });
+		useWorldStore.setState({ chunkSetting: setting });
 		return controller;
 	}
 
@@ -235,7 +257,6 @@ export class Game {
 		});
 		client.onPlayerJoined(id => this.spawnNPC(id));
 		client.onPlayerTranslate(({ playerId, x, y, z }) => {
-			console.log("move");
 			this.npcPlayers.get(playerId)?.moveTo(x, y, z);
 		});
 		client.onPlayerRotate(({ playerId, pitch, yaw }) => {
@@ -259,7 +280,7 @@ export class Game {
 					y: pos.y,
 					z: pos.z,
 				});
-				this.seedNearPlayer(pos.x, pos.z);
+				this.seedAnimalNearPlayer(pos);
 			}, 100)
 		);
 		playerEvents.on(
@@ -273,6 +294,8 @@ export class Game {
 			}, 100)
 		);
 	}
+
+	private seedAnimalNearPlayer(pos: Position) {}
 
 	private setupPlayerPosition(setPos?: (x: number, y: number, z: number) => void) {
 		const [x, y, z] = this.worldStore.worldController!.getChunkCenterTop(

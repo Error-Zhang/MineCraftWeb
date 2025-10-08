@@ -45,6 +45,15 @@ export class WorldController {
 		return [centerX, this.chunkManager.getColumnHeight(x, z), centerZ];
 	}
 
+	getChunkPosition(x: number, z: number): [number, number] {
+		const [chunkX, chunkZ] = this.chunkManager.worldToChunk(x, z);
+		return [chunkX, chunkZ];
+	}
+
+	getColumnHeight(x: number, z: number): number {
+		return this.chunkManager.getColumnHeight(x, z);
+	}
+
 	onChunkUnload(callback: (chunk: Chunk) => void) {
 		this.chunkManager.onChunkUnload(callback);
 	}

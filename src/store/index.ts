@@ -38,6 +38,7 @@ export const useWorldStore = create<WorldStore>(set => ({
 	worldMode: 0,
 	season: 0,
 	worldController: null,
+	chunkSetting: null,
 	reset: () => set({ worldId: 0, worldController: null }),
 }));
 
