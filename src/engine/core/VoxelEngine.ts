@@ -1,4 +1,12 @@
-import { AbstractMesh, Effect, Engine, Scene, Vector3 } from "@babylonjs/core";
+import {
+	AbstractMesh,
+	Color4,
+	Effect,
+	Engine,
+	Scene,
+	Vector3,
+	WebGPUEngine,
+} from "@babylonjs/core";
 import { ChunkManager } from "../chunk/ChunkManager";
 import { BlockRegistry } from "../block/BlockRegistry";
 import { BlockDefinition } from "../types/block.type.ts";
@@ -29,7 +37,7 @@ Effect.ShadersStore["lavaVertexShader"] = lavaVertexShader;
 Effect.ShadersStore["lavaFragmentShader"] = lavaFragmentShader;
 
 export class VoxelEngine {
-	public readonly engine: Engine;
+	public engine!: Engine | WebGPUEngine;
 	public scene?: Scene;
 
 	private animationCallbacks: Set<() => void> = new Set();
@@ -42,8 +50,8 @@ export class VoxelEngine {
 	private miniBlockBuilder?: MiniBlockBuilder;
 	private havokPlugin?: HavokPlugin;
 
-	constructor(canvas: HTMLCanvasElement) {
-		this.engine = new Engine(canvas, true);
+	constructor(canvas: HTMLCanvasElement, engineType: "webgl" | "webgpu" = "webgl") {
+		this.initEngine(canvas, engineType);
 		window.addEventListener("resize", this.resizeListener.bind(this));
 	}
 
@@ -57,6 +65,11 @@ export class VoxelEngine {
 		return blockRegistry;
 	}
 
+	async initEngine(canvas: HTMLCanvasElement, engineType: "webgl" | "webgpu") {
+		this.engine =
+			engineType === "webgpu" ? await WebGPUEngine.CreateAsync(canvas) : new Engine(canvas, true);
+	}
+
 	public disposeScene() {
 		for (const dispose of this.disposers) dispose();
 		this.engine.stopRenderLoop();
@@ -66,9 +79,7 @@ export class VoxelEngine {
 	}
 
 	public clearCanvas() {
-		const gl = this.engine._gl;
-		gl.clearColor(0, 0, 0, 1);
-		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+		this.engine.clear(new Color4(0, 0, 0, 1), true, true);
 	}
 
 	public destroy() {

@@ -75,7 +75,6 @@ export class Game {
 		this.canvas = canvas;
 		GameWindow.create(canvas);
 		this.voxelEngine = new VoxelEngine(canvas);
-
 		// 初始化音乐管理器
 		this.musicManager = new BackgroundMusicManager();
 		this.musicManager.initialize();
