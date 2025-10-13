@@ -21,6 +21,7 @@ import { MiniBlockBuilder } from "@engine/renderer/MiniBlockBuilder.ts";
 import HavokPhysics from "@babylonjs/havok";
 import { HavokPlugin } from "@babylonjs/core/Physics/v2";
 import ModelBlockManager from "@engine/renderer/ModelBlockManager.ts";
+import { WorldConfig } from "@engine/config/WorldConfig";
 // 注册着色器
 Effect.ShadersStore["waterVertexShader"] = waterVertexShader;
 Effect.ShadersStore["waterFragmentShader"] = waterFragmentShader;
@@ -156,9 +157,13 @@ export class VoxelEngine {
 			viewDistance?: number;
 		} = {}
 	) {
-		chunkSize && (Chunk.Size = chunkSize);
-		chunkHeight && (Chunk.Height = chunkHeight);
-		viewDistance && (ChunkManager.ViewDistance = viewDistance);
+		// 使用WorldConfig统一管理配置
+		WorldConfig.initialize({
+			chunkSize,
+			chunkHeight,
+			viewDistance,
+		});
+
 		this.chunkManager = Singleton.create(ChunkManager, chunkGenerator);
 		this._worldContext.add(this.chunkManager);
 		this.onUpdate(() => {
@@ -166,7 +171,10 @@ export class VoxelEngine {
 				entity.tick?.();
 			});
 		});
-		console.log("[VoxelEngine] 区块注册完成");
+
+		const config = WorldConfig.getConfig();
+		console.log("[VoxelEngine] 区块注册完成", config);
+
 		return new WorldController(this.chunkManager, this.environment!);
 	}
 

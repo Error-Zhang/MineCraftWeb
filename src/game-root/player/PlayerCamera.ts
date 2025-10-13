@@ -1,7 +1,7 @@
-import { FreeCamera, Ray, Scene, Vector3 } from "@babylonjs/core";
+import { FreeCamera, Scene, Vector3 } from "@babylonjs/core";
 import { PlayerInputSystem } from "@/game-root/player/PlayerInputSystem.ts";
-import { ParabolaMotion } from "@/game-root/utils/ParabolaMotion.ts";
 import { playerEvents } from "@/game-root/core/events.ts";
+import { PlayerPhysics } from "@/game-root/player/PlayerPhysics.ts";
 
 // 基础相机类
 export abstract class BasePlayerCamera {
@@ -140,71 +140,99 @@ export abstract class BasePlayerCamera {
 	}
 }
 
-// 生存模式相机
+// 生存模式相机（使用改进的物理系统）
 export class SurvivalCamera extends BasePlayerCamera {
-	public isGrounded = true;
-	private isJumping = false;
-	private velocityY = 0;
-	private motion: ParabolaMotion;
-	private speed: number = 1;
+	/** 物理系统 */
+	private physics: PlayerPhysics;
+
+	/** 移动速度倍率（跳跃时减速） */
+	private moveSpeedMultiplier: number = 1.0;
+
+	/** 上一帧的水平移动方向 */
+	private lastMoveDirection: Vector3 = Vector3.Zero();
 
 	constructor(scene: Scene, canvas: HTMLCanvasElement) {
 		super(scene, canvas);
-		this.motion = new ParabolaMotion(0.7, "up", 1);
+		this.physics = new PlayerPhysics(scene, this.camera.position);
 	}
 
 	public override update(dt: number): void {
-		this.checkGrounded();
-		// 判断是否着地
-		if (this.isJumping) {
-			this.speed = 0.5;
-			this.velocityY = this.motion.update(dt);
+		// 转换dt从毫秒到秒
+		const deltaTime = dt / 1000;
 
-			if (this.velocityY <= 0 && this.isGrounded) {
-				this.velocityY = 0;
-				this.motion.reset();
-				this.isJumping = false;
-				this.speed = 1;
+		// 1. 更新物理系统，获取垂直位移
+		const verticalDisplacement = this.physics.update(deltaTime);
+
+		// 2. 应用垂直位移
+		this.moveValue.y = verticalDisplacement;
+
+		// 3. 处理台阶爬升
+		if (this.physics.getIsGrounded() && this.lastMoveDirection.length() > 0) {
+			const stepHeight = this.physics.checkStepUp(this.lastMoveDirection);
+			if (stepHeight > 0) {
+				// 可以爬上台阶，直接提升高度
+				this.moveValue.y += stepHeight;
 			}
-			this.camera.cameraDirection.y = this.velocityY;
 		}
 
-		if (!this.isGrounded && !this.isJumping) {
-			this.camera.cameraDirection.y = -0.02;
+		// 4. 调整移动速度（跳跃/下落时减速）
+		if (!this.physics.getIsGrounded()) {
+			this.moveSpeedMultiplier = 0.7; // 空中移动减速
+		} else {
+			this.moveSpeedMultiplier = 1.0; // 地面正常速度
 		}
 
+		// 5. 调用父类更新
 		super.update(dt);
+
+		// 6. 重置水平移动方向
+		this.lastMoveDirection = Vector3.Zero();
+	}
+
+	/**
+	 * 设置位置（重写以更新物理系统）
+	 */
+	public override setPosition(x: number, y: number, z: number): void {
+		super.setPosition(x, y, z);
+		this.physics.setGrounded(false); // 传送后需要重新检测地面
 	}
 
 	protected initCamera(): void {
 		super.initCamera();
+		// 禁用Babylon自带的重力和碰撞，使用自定义物理系统
 		this.camera.checkCollisions = true;
-		this.camera.applyGravity = true;
+		this.camera.applyGravity = false; // 使用自定义重力
+
+		// 调整碰撞体大小（更符合Minecraft）
+		this.camera.ellipsoid = new Vector3(0.3, 0.9, 0.3);
+		this.camera.ellipsoidOffset = new Vector3(0, 0, 0);
 	}
 
 	protected bindInput(): void {
 		super.bindInput();
 
-		// 跳跃
+		// 跳跃开始
 		this.inputSystem.onActionStart("jump", () => {
-			if (this.isGrounded) {
-				this.isJumping = true;
-				this.isGrounded = false;
-			}
+			this.physics.tryJump();
+		});
+
+		// 跳跃释放（用于可变跳跃高度）
+		this.inputSystem.onActionEnd("jump", () => {
+			this.physics.releaseJump();
 		});
 	}
 
 	protected getMoveSpeed(): number {
-		return this.moveSpeed * this.speed; // 生存模式移动速度
+		return this.moveSpeed * this.moveSpeedMultiplier;
 	}
 
-	private checkGrounded() {
-		// 从碰撞体底部发射一条短射线向下
-		const origin = this.camera.position;
-		const ray = new Ray(origin, Vector3.Down(), 2);
-		const pick = this.scene.pickWithRay(ray, mesh => mesh.isPickable && mesh.checkCollisions);
-		this.isGrounded = !!(pick?.hit && pick.distance <= 2);
-		return this.isGrounded;
+	protected override moveByDirection(direction: Vector3): void {
+		// 记录移动方向用于台阶检测
+		this.lastMoveDirection = direction.clone();
+		this.lastMoveDirection.y = 0;
+
+		// 调用父类方法
+		super.moveByDirection(direction);
 	}
 }
 

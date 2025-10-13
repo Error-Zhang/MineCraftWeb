@@ -11,6 +11,7 @@ import { VoxelEngine } from "@engine/core/VoxelEngine.ts";
 import { ChunkData } from "@engine/types/chunk.type.ts";
 import { useWorldStore } from "@/store";
 import { WorldStore } from "@/store/interface.ts";
+import { WorldConfig } from "@engine/config/WorldConfig";
 
 class VertexBuilder implements IVertexBuilder {
 	private _chunks: Map<string, Chunk> = new Map();
@@ -20,8 +21,12 @@ class VertexBuilder implements IVertexBuilder {
 		public ChunkSize: number,
 		public ChunkHeight: number
 	) {
-		Chunk.Height = ChunkHeight;
-		Chunk.Size = ChunkSize;
+		// 在Worker线程中初始化WorldConfig
+		// Worker是独立线程，需要单独初始化配置
+		WorldConfig.initialize({
+			chunkSize: ChunkSize,
+			chunkHeight: ChunkHeight,
+		});
 	}
 
 	public addBlocks(blockTypes: IBlockReflect) {

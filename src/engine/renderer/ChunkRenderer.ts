@@ -95,7 +95,6 @@ export class ChunkRenderer {
 		});
 	}
 
-	// bugfix:如果你在某天发现本应该被销毁的网格回到了世界原点，那一定是dispose出了问题
 	public dispose() {
 		this.modelInstances.forEach(modelInstance => {
 			modelInstance.dispose();

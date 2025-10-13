@@ -283,7 +283,7 @@ export class BlockMaterialManager extends SingleClass {
 
 	createMaterial(config: MaterialConfig): Material {
 		const {
-			materialType = "standard",
+			materialType = "pbr",
 			color = new Color3(1, 1, 1),
 			emissive = new Color3(0, 0, 0),
 			metallic = 0,

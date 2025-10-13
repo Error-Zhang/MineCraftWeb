@@ -3,6 +3,29 @@ import { useWorldStore } from "@/store";
 import BlockType from "@/game-root/block-definitions/BlockType.ts";
 
 /**
+ * 寻路结果
+ */
+export interface PathfindingResult {
+	isCompleted: boolean;
+	isInProgress: boolean;
+	pathCost: number;
+	positionsChecked: number;
+	path: Vector3[];
+}
+
+/**
+ * 寻路请求
+ */
+export interface PathfindingRequest {
+	start: Vector3;
+	end: Vector3;
+	minDistance: number;
+	boxSize: Vector3;
+	maxPositionsToCheck: number;
+	result: PathfindingResult;
+}
+
+/**
  * 路径节点
  */
 interface PathNode {
@@ -13,6 +36,33 @@ interface PathNode {
 	h: number; // 从当前节点到终点的启发式代价
 	f: number; // f = g + h
 	parent: PathNode | null;
+}
+
+/**
+ * 寻路拥堵管理器
+ */
+class PathfindingCongestionManager {
+	private static readonly CAPACITY = 500;
+	private static readonly CAPACITY_LIMIT = 1000;
+	private static readonly DECAY_RATE = 20; // per second
+	private static congestion = 0;
+	private static lastUpdateTime = Date.now();
+
+	public static canPathfind(): boolean {
+		this.update();
+		return this.congestion < this.CAPACITY;
+	}
+
+	public static addCongestion(amount: number): void {
+		this.congestion = Math.min(this.congestion + amount, this.CAPACITY_LIMIT);
+	}
+
+	private static update(): void {
+		const now = Date.now();
+		const deltaSeconds = (now - this.lastUpdateTime) / 1000;
+		this.congestion = Math.max(this.congestion - this.DECAY_RATE * deltaSeconds, 0);
+		this.lastUpdateTime = now;
+	}
 }
 
 /**
@@ -270,10 +320,10 @@ export const DEFAULT_ANIMAL_CONFIGS: Record<string, AnimalMovementConfig> = {
 
 /**
  * 确定性A*寻路系统
- * 使用相同输入保证所有客户端计算出相同路径
+ * 基于生存战争的寻路系统改进
  */
 export class AnimalPathfinder {
-	private static readonly MAX_ITERATIONS = 500; // 最大迭代次数
+	private static readonly MAX_ITERATIONS = 1000; // 最大迭代次数
 	private static readonly NEIGHBOR_OFFSETS = [
 		{ x: 1, z: 0 }, // 东
 		{ x: -1, z: 0 }, // 西
@@ -286,16 +336,59 @@ export class AnimalPathfinder {
 	];
 
 	/**
+	 * 异步寻路（带拥堵控制）
+	 * @param start 起点
+	 * @param end 终点
+	 * @param config 动物移动配置
+	 * @param maxPositions 最大检查位置数
+	 * @returns PathfindingResult
+	 */
+	public static async findPathAsync(
+		start: Vector3,
+		end: Vector3,
+		config: AnimalMovementConfig,
+		maxPositions: number = 500
+	): Promise<PathfindingResult> {
+		const result: PathfindingResult = {
+			isCompleted: false,
+			isInProgress: true,
+			pathCost: 0,
+			positionsChecked: 0,
+			path: [],
+		};
+
+		// 检查拥堵
+		if (!PathfindingCongestionManager.canPathfind()) {
+			result.isCompleted = true;
+			result.isInProgress = false;
+			return result;
+		}
+
+		// 执行寻路
+		const path = this.findPath(start, end, config, maxPositions);
+		result.path = path || [];
+		result.isCompleted = true;
+		result.isInProgress = false;
+
+		// 添加拥堵
+		PathfindingCongestionManager.addCongestion(result.positionsChecked);
+
+		return result;
+	}
+
+	/**
 	 * 寻找从起点到终点的路径
 	 * @param start 起点
 	 * @param end 终点
 	 * @param config 动物移动配置
+	 * @param maxPositions 最大检查位置数
 	 * @returns 路径点数组，如果找不到路径返回null
 	 */
 	public static findPath(
 		start: Vector3,
 		end: Vector3,
-		config: AnimalMovementConfig
+		config: AnimalMovementConfig,
+		maxPositions: number = 500
 	): Vector3[] | null {
 		const startNode: PathNode = {
 			x: Math.floor(start.x),
@@ -317,8 +410,9 @@ export class AnimalPathfinder {
 		openSet.set(this.nodeKey(startNode), startNode);
 
 		let iterations = 0;
+		const maxIterations = Math.min(this.MAX_ITERATIONS, maxPositions);
 
-		while (openList.length > 0 && iterations < this.MAX_ITERATIONS) {
+		while (openList.length > 0 && iterations < maxIterations) {
 			iterations++;
 
 			// 找到f值最小的节点（确定性排序）
@@ -336,7 +430,9 @@ export class AnimalPathfinder {
 
 			// 到达目标
 			if (Math.abs(current.x - endX) <= 1 && Math.abs(current.z - endZ) <= 1) {
-				return this.reconstructPath(current, end);
+				const path = this.reconstructPath(current, end);
+				// 平滑路径
+				return this.smoothPath(path, config);
 			}
 
 			// 检查所有邻居
@@ -392,49 +488,6 @@ export class AnimalPathfinder {
 	}
 
 	/**
-	 * 简化版寻路 - 直接朝目标移动（用于短距离）
-	 */
-	public static findSimplePath(
-		start: Vector3,
-		end: Vector3,
-		config: AnimalMovementConfig
-	): Vector3[] | null {
-		const path: Vector3[] = [];
-		const startX = Math.floor(start.x);
-		const startZ = Math.floor(start.z);
-		const endX = Math.floor(end.x);
-		const endZ = Math.floor(end.z);
-
-		const dx = endX - startX;
-		const dz = endZ - startZ;
-		const distance = Math.sqrt(dx * dx + dz * dz);
-
-		if (distance < 0.1) return [end];
-
-		const steps = Math.ceil(distance);
-		const stepX = dx / steps;
-		const stepZ = dz / steps;
-
-		let currentY = Math.floor(start.y);
-
-		for (let i = 1; i <= steps; i++) {
-			const x = Math.floor(startX + stepX * i);
-			const z = Math.floor(startZ + stepZ * i);
-
-			const y = this.findWalkableY(x, z, currentY, config);
-			if (y === null) {
-				// 遇到障碍，使用完整A*
-				return this.findPath(start, end, config);
-			}
-
-			path.push(new Vector3(x + 0.5, y, z + 0.5));
-			currentY = y;
-		}
-
-		return path;
-	}
-
-	/**
 	 * 找到指定位置的可行走Y坐标
 	 */
 	private static findWalkableY(
@@ -443,7 +496,31 @@ export class AnimalPathfinder {
 		currentY: number,
 		config: AnimalMovementConfig
 	): number | null {
-		// 检查当前高度附近
+		// 飞行动物可以在空中，不需要地面
+		if (config.canFly) {
+			// 检查当前高度附近（允许垂直移动）
+			for (let dy = -2; dy <= 2; dy++) {
+				const checkY = currentY + dy;
+				if (this.isWalkable(x, checkY, z, config)) {
+					return checkY;
+				}
+			}
+			return null;
+		}
+
+		// 鱼类必须在水中
+		if (config.preferWater) {
+			// 检查当前高度附近（允许垂直游动）
+			for (let dy = -2; dy <= 2; dy++) {
+				const checkY = currentY + dy;
+				if (this.isWalkable(x, checkY, z, config)) {
+					return checkY;
+				}
+			}
+			return null;
+		}
+
+		// 陆地动物：检查向上跳跃（限制高度）
 		for (let dy = 0; dy <= config.maxJumpHeight; dy++) {
 			const checkY = currentY + dy;
 			if (this.isWalkable(x, checkY, z, config)) {
@@ -451,7 +528,7 @@ export class AnimalPathfinder {
 			}
 		}
 
-		// 检查下方
+		// 检查下方（最多3格）
 		for (let dy = -1; dy >= -3; dy--) {
 			const checkY = currentY + dy;
 			if (this.isWalkable(x, checkY, z, config)) {
@@ -464,6 +541,7 @@ export class AnimalPathfinder {
 
 	/**
 	 * 检查位置是否可行走（根据动物类型）
+	 * 基于生存战争的逻辑
 	 */
 	private static isWalkable(
 		x: number,
@@ -496,11 +574,11 @@ export class AnimalPathfinder {
 			return true;
 		}
 
-		// 鱼类：必须在水中
+		// 鱼类：必须在水中（ImmersionFactor > 0.33）
 		if (config.preferWater) {
 			// 当前位置必须是水
 			if (!isWater) return false;
-			// 上方和下方至少有一个是水（确保在水体中）
+			// 上下至少有一个是水（确保浸没度足够）
 			if (!isWaterBelow && !isWaterAbove) return false;
 			return true;
 		}
@@ -515,25 +593,27 @@ export class AnimalPathfinder {
 			return true;
 		}
 
-		// 陆地动物：不能在水面上走
+		// 陆地动物：不能在水中行走（除非会游泳）
 		if (!config.canSwim) {
-			// 脚下不能是水
-			if (isWaterBelow) return false;
 			// 当前位置不能是水
 			if (isWater) return false;
+			// 脚下不能是水
+			if (isWaterBelow) return false;
 		}
 
-		// 需要地面支撑（非空气且非水）
-		if (!hasBlockBelow || isWaterBelow) return false;
-
-		// 当前位置必须是空气或水（如果会游泳）
-		if (hasBlockAt) {
-			if (isWater && config.canSwim) {
-				// 会游泳的动物可以在水中
-				return true;
-			}
-			return false;
+		// 会游泳的陆地动物：可以在水中，但不能水上漂
+		if (config.canSwim && isWater) {
+			// 在水中时，下方必须有水或地面
+			if (!hasBlockBelow && !isWaterBelow) return false;
+			return true;
 		}
+
+		// 陆地动物：需要地面支撑
+		if (!hasBlockBelow) return false;
+		if (isWaterBelow) return false; // 不能站在水上
+
+		// 当前位置必须是空气
+		if (hasBlockAt && !isWater) return false;
 
 		// 头部必须有空间
 		if (hasBlockAbove && !isWaterAbove) return false;
@@ -542,10 +622,93 @@ export class AnimalPathfinder {
 	}
 
 	/**
-	 * 启发式函数 - 曼哈顿距离
+	 * 启发式函数 - 对角线距离（更准确）
+	 * 基于生存战争的启发式算法
 	 */
 	private static heuristic(x1: number, z1: number, x2: number, z2: number): number {
-		return Math.abs(x1 - x2) + Math.abs(z1 - z2);
+		const dx = Math.abs(x1 - x2);
+		const dz = Math.abs(z1 - z2);
+		// 对角线距离：1.41 * min + 1.0 * (max - min)
+		if (dx > dz) {
+			return 1.41 * dz + 1.0 * (dx - dz);
+		}
+		return 1.41 * dx + 1.0 * (dz - dx);
+	}
+
+	/**
+	 * 路径平滑算法
+	 * 移除不必要的路径点，基于生存战争的SmoothPath
+	 */
+	private static smoothPath(path: Vector3[], config: AnimalMovementConfig): Vector3[] {
+		if (path.length <= 2) return path;
+
+		const smoothed: Vector3[] = [path[0]];
+		let currentIndex = 0;
+
+		while (currentIndex < path.length - 1) {
+			let farthestIndex = currentIndex + 1;
+
+			// 尝试找到最远的可直达点
+			for (let i = currentIndex + 2; i < path.length; i++) {
+				if (this.isPassable(path[currentIndex], path[i], config)) {
+					farthestIndex = i;
+				} else {
+					break;
+				}
+			}
+
+			if (farthestIndex > currentIndex + 1) {
+				// 跳过中间点
+				currentIndex = farthestIndex;
+				smoothed.push(path[farthestIndex]);
+			} else {
+				// 保留下一个点
+				currentIndex++;
+				smoothed.push(path[currentIndex]);
+			}
+		}
+
+		return smoothed;
+	}
+
+	/**
+	 * 检查两点之间是否可通行（用于路径平滑）
+	 */
+	private static isPassable(p1: Vector3, p2: Vector3, config: AnimalMovementConfig): boolean {
+		const worldController = useWorldStore.getState().worldController;
+		if (!worldController) return false;
+
+		const dx = p2.x - p1.x;
+		const dz = p2.z - p1.z;
+		const distance = Math.sqrt(dx * dx + dz * dz);
+
+		if (distance < 0.1) return true;
+
+		// 检查路径上的点
+		const steps = Math.ceil(distance * 2); // 更密集的检查
+		for (let i = 0; i <= steps; i++) {
+			const t = i / steps;
+			const x = Math.floor(p1.x + dx * t);
+			const y = Math.floor(p1.y + (p2.y - p1.y) * t);
+			const z = Math.floor(p1.z + dz * t);
+
+			// 检查是否可行走
+			if (!this.isWalkable(x, y, z, config)) {
+				return false;
+			}
+
+			// 检查头部空间
+			const blockAbove = worldController.getBlock(new Vector3(x, y + 1, z));
+			if (
+				blockAbove &&
+				blockAbove.id !== 0 &&
+				blockAbove.blockType !== BlockType[BlockType.WaterBlock]
+			) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	/**

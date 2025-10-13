@@ -1,8 +1,13 @@
 import { AbstractMesh, Scene, TransformNode, Vector3 } from "@babylonjs/core";
-import { AnimalMovementConfig, AnimalPathfinder, DEFAULT_ANIMAL_CONFIGS } from "./pathfinding/AnimalPathfinder";
+import { AnimalMovementConfig, DEFAULT_ANIMAL_CONFIGS } from "./pathfinding/AnimalPathfinder";
+import { PathfindingStateMachine, PathfindingState } from "./pathfinding/PathfindingStateMachine";
 import AnimalModelCache from "./AnimalModelCache";
 import { generateTargetPosition, getAnimalBehaviorConfig, type IdleBehaviorConfig } from "./AnimalBehaviorConfig";
 import { useWorldStore } from "@/store";
+import BlockType from "@/game-root/block-definitions/BlockType.ts";
+import { FlyAroundBehavior } from "./behaviors/FlyAroundBehavior";
+import { FishBehavior } from "./behaviors/FishBehavior";
+import { GameConfig } from "@/game-root/config/GameConfig";
 
 /**
  * 简化的动物实体
@@ -18,12 +23,17 @@ export class SimpleAnimalEntity {
 	private mesh: AbstractMesh | null = null;
 	private position: Vector3;
 	private targetPosition: Vector3 | null = null;
-	private path: Vector3[] = [];
-	private currentPathIndex: number = 0;
 	private config: AnimalMovementConfig;
 	private behaviorConfig: IdleBehaviorConfig;
 	private isMoving: boolean = false;
 	private moveSpeed: number = 0.08;
+
+	// 增强寻路系统
+	private pathfindingStateMachine: PathfindingStateMachine;
+
+	// 特殊行为
+	private flyBehavior?: FlyAroundBehavior;
+	private fishBehavior?: FishBehavior;
 
 	// 行为状态
 	private behaviorType: string = "Idle"; // Idle, Walk, Flee
@@ -36,6 +46,9 @@ export class SimpleAnimalEntity {
 	private readonly GRAVITY = -20; // 重力加速度 (格/秒²)
 	private readonly GROUND_CHECK_DISTANCE = 0.5; // 地面检测距离
 	private isGrounded: boolean = false;
+	private immersionFactor: number = 0; // 浸没度 (0-1)
+	private isFlying: boolean = false;
+	private isSwimming: boolean = false;
 
 	// 朝向控制
 	private targetRotation: number = 0;
@@ -49,6 +62,17 @@ export class SimpleAnimalEntity {
 		this.config = DEFAULT_ANIMAL_CONFIGS[type] || DEFAULT_ANIMAL_CONFIGS.Cow;
 		this.behaviorConfig = getAnimalBehaviorConfig(type);
 		this.moveSpeed = this.behaviorConfig.moveSpeed;
+
+		// 初始化寻路状态机
+		this.pathfindingStateMachine = new PathfindingStateMachine(this.config);
+
+		// 初始化特殊行为
+		if (this.config.canFly) {
+			this.flyBehavior = new FlyAroundBehavior();
+		}
+		if (this.config.preferWater) {
+			this.fishBehavior = new FishBehavior();
+		}
 
 		// 设置随机Idle持续时间
 		this.idleDuration = this.getRandomIdleDuration();
@@ -83,15 +107,22 @@ export class SimpleAnimalEntity {
 	/**
 	 * 更新动物
 	 */
-	public update(deltaTime: number): void {
+	public async update(deltaTime: number): Promise<void> {
 		if (!this.isOwned) return; // 非拥有者不更新AI
+
+		// 检查AI开关
+		if (!GameConfig.ANIMAL_SYSTEM.enableAI) {
+			// AI禁用时，只更新位置，不更新行为
+			this.rootNode.position.copyFrom(this.position);
+			return;
+		}
 
 		// 更新行为
 		this.updateBehavior(deltaTime);
 
-		// 更新移动
-		if (this.isMoving && this.path.length > 0) {
-			this.updateMovement(deltaTime);
+		// 更新寻路状态机
+		if (this.isMoving) {
+			await this.updatePathfinding(deltaTime);
 		}
 
 		// 更新位置
@@ -99,24 +130,25 @@ export class SimpleAnimalEntity {
 	}
 
 	/**
-	 * 移动到目标位置
+	 * 移动到目标位置（使用增强寻路系统）
 	 */
 	public moveTo(target: Vector3): void {
 		this.targetPosition = target;
+		this.isMoving = true;
 
-		// 使用寻路系统计算路径
+		// 使用寻路状态机
 		const distance = Vector3.Distance(this.position, target);
+		const maxPathfindingPositions = distance > 20 ? 800 : 500;
 
-		if (distance < 10) {
-			// 短距离使用简单寻路
-			this.path = AnimalPathfinder.findSimplePath(this.position, target, this.config) || [];
-		} else {
-			// 长距离使用A*
-			this.path = AnimalPathfinder.findPath(this.position, target, this.config) || [];
-		}
-
-		this.currentPathIndex = 0;
-		this.isMoving = this.path.length > 0;
+		this.pathfindingStateMachine.setDestination(
+			target,
+			this.moveSpeed,
+			0.5, // range
+			maxPathfindingPositions,
+			true, // useRandomMovements
+			false, // ignoreHeightDifference
+			false // raycastDestination
+		);
 	}
 
 	/**
@@ -147,8 +179,8 @@ export class SimpleAnimalEntity {
 	 */
 	public stopMoving(): void {
 		this.isMoving = false;
-		this.path = [];
 		this.targetPosition = null;
+		this.pathfindingStateMachine.stop();
 	}
 
 	/**
@@ -210,6 +242,20 @@ export class SimpleAnimalEntity {
 	 * 更新行为逻辑
 	 */
 	private updateBehavior(deltaTime: number): void {
+		// 鱼类特殊行为：检查是否离水
+		if (this.fishBehavior) {
+			const needWater = this.fishBehavior.updateOutOfWaterTime(deltaTime, this.immersionFactor);
+			if (needWater) {
+				// 紧急寻找水源
+				const waterTarget = this.fishBehavior.findWaterDestination(this.position);
+				if (waterTarget) {
+					this.moveTo(waterTarget);
+					this.behaviorType = "Flee"; // 逃离状态
+					return;
+				}
+			}
+		}
+
 		if (this.behaviorType === "Idle") {
 			this.idleTimer += deltaTime;
 
@@ -228,6 +274,18 @@ export class SimpleAnimalEntity {
 				this.behaviorType = "Idle";
 				this.idleTimer = 0;
 				this.idleDuration = this.getRandomIdleDuration();
+				// 鱼类回到水中后重置
+				if (this.fishBehavior) {
+					this.fishBehavior.reset();
+				}
+			}
+		} else if (this.behaviorType === "Flee") {
+			// 逃离状态，到达目标后回到Idle
+			if (!this.isMoving) {
+				this.behaviorType = "Idle";
+				if (this.fishBehavior) {
+					this.fishBehavior.reset();
+				}
 			}
 		}
 	}
@@ -236,8 +294,20 @@ export class SimpleAnimalEntity {
 	 * 开始随机行走
 	 */
 	private startRandomWalk(): void {
-		// 使用行为配置生成目标位置
-		const target = generateTargetPosition(this.position, this.behaviorConfig);
+		let target: Vector3;
+
+		// 飞行动物使用特殊的飞行行为
+		if (this.flyBehavior) {
+			target = this.flyBehavior.generateFlyTarget(this.position);
+		}
+		// 鱼类使用水中游动行为
+		else if (this.fishBehavior) {
+			target = this.fishBehavior.generateSwimTarget(this.position);
+		}
+		// 普通陆地动物
+		else {
+			target = generateTargetPosition(this.position, this.behaviorConfig);
+		}
 
 		this.moveTo(target);
 		this.behaviorType = "Walk";
@@ -280,6 +350,34 @@ export class SimpleAnimalEntity {
 	}
 
 	/**
+	 * 更新浸没度（基于生存战争的ImmersionFactor）
+	 */
+	private updateImmersionFactor(): void {
+		const worldController = useWorldStore.getState().worldController;
+		if (!worldController) {
+			this.immersionFactor = 0;
+			return;
+		}
+
+		const waterBlock = BlockType[BlockType.WaterBlock];
+		let waterBlocks = 0;
+		const checkPoints = 3; // 检查脚、腰、头
+
+		for (let i = 0; i < checkPoints; i++) {
+			const checkY = Math.floor(this.position.y + (i * 0.5));
+			const block = worldController.getBlock(
+				new Vector3(Math.floor(this.position.x), checkY, Math.floor(this.position.z))
+			);
+			if (block && block.blockType === waterBlock) {
+				waterBlocks++;
+			}
+		}
+
+		// 浸没度 = 水方块数 / 检查点数
+		this.immersionFactor = waterBlocks / checkPoints;
+	}
+
+	/**
 	 * 平滑旋转朝向
 	 */
 	private updateRotation(deltaTime: number): void {
@@ -303,23 +401,79 @@ export class SimpleAnimalEntity {
 	}
 
 	/**
-	 * 更新移动（物理方式）
+	 * 更新寻路系统
 	 */
-	private updateMovement(deltaTime: number): void {
+	private async updatePathfinding(deltaTime: number): Promise<void> {
+		const moveVector = await this.pathfindingStateMachine.update(this.position, deltaTime);
+
+		if (!moveVector) {
+			// 检查是否卡住
+			if (this.pathfindingStateMachine.isStuck()) {
+				console.log(`[Animal ${this.type}] Stuck, stopping movement`);
+				this.stopMoving();
+				this.behaviorType = "Idle";
+			}
+			// 检查是否到达目标
+			else if (this.pathfindingStateMachine.getState() === PathfindingState.Stopped) {
+				this.isMoving = false;
+			}
+			return;
+		}
+
+		// 应用移动向量
+		this.applyMovement(moveVector, deltaTime);
+	}
+
+	/**
+	 * 应用移动向量（物理方式）
+	 * 基于生存战争的ComponentLocomotion
+	 */
+	private applyMovement(moveVector: Vector3, deltaTime: number): void {
 		const deltaSeconds = deltaTime / 1000;
+
+		// 检查浸没度
+		this.updateImmersionFactor();
 
 		// 检查是否在地面上
 		this.isGrounded = this.checkGrounded();
 
-		// 应用重力（飞行动物也需要轻微的重力，除非在空中悬停）
-		if (!this.isGrounded) {
-			if (this.behaviorConfig.canFly) {
-				// 飞行动物有轻微的重力，但会自动调整高度
-				this.velocity.y += this.GRAVITY * deltaSeconds * 0.3;
-			} else {
-				// 陆地动物正常重力
-				this.velocity.y += this.GRAVITY * deltaSeconds;
+		// 重置移动状态
+		this.isFlying = false;
+		this.isSwimming = false;
+
+		// 飞行模式（FlySpeed > 0 && FlyOrder）
+		if (this.behaviorConfig.canFly && moveVector.lengthSquared() > 0) {
+			// 飞行动物在空中或需要飞行时
+			if (!this.isGrounded || this.immersionFactor < 1.0) {
+				this.velocity.x = moveVector.x;
+				this.velocity.z = moveVector.z;
+				// 飞行时禁用重力
+				this.isFlying = true;
+				// 更新朝向
+				this.targetRotation = Math.atan2(moveVector.x, moveVector.z);
+				return;
 			}
+		}
+
+		// 游泳模式（SwimSpeed > 0 && ImmersionFactor > 0.5）
+		if (this.immersionFactor > 0.5) {
+			if (this.config.canSwim || this.config.preferWater) {
+				this.velocity.x = moveVector.x;
+				this.velocity.z = moveVector.z;
+				// 游泳时禁用重力（除非垂直移动）
+				this.isSwimming = true;
+				// 更新朝向
+				if (moveVector.lengthSquared() > 0.01) {
+					this.targetRotation = Math.atan2(moveVector.x, moveVector.z);
+				}
+				return;
+			}
+		}
+
+		// 陆地移动模式
+		if (!this.isGrounded) {
+			// 在空中，应用重力
+			this.velocity.y += this.GRAVITY * deltaSeconds;
 		} else {
 			// 在地面上，重置垂直速度并贴地
 			this.velocity.y = 0;
@@ -327,39 +481,13 @@ export class SimpleAnimalEntity {
 			this.position.y = groundHeight;
 		}
 
-		// 水平移动
-		if (this.isMoving && this.currentPathIndex < this.path.length) {
-			const targetWaypoint = this.path[this.currentPathIndex];
-			const horizontalDirection = new Vector3(
-				targetWaypoint.x - this.position.x,
-				0,
-				targetWaypoint.z - this.position.z
-			);
-			const horizontalDistance = horizontalDirection.length();
+		// 应用水平移动
+		this.velocity.x = moveVector.x;
+		this.velocity.z = moveVector.z;
 
-			if (horizontalDistance < 0.2) {
-				// 到达当前路径点
-				this.currentPathIndex++;
-				if (this.currentPathIndex >= this.path.length) {
-					this.isMoving = false;
-					this.velocity.x = 0;
-					this.velocity.z = 0;
-				}
-			} else {
-				// 计算移动速度
-				const normalizedDirection = horizontalDirection.normalize();
-				const speed = this.moveSpeed;
-				
-				this.velocity.x = normalizedDirection.x * speed;
-				this.velocity.z = normalizedDirection.z * speed;
-
-				// 更新目标朝向
-				this.targetRotation = Math.atan2(normalizedDirection.x, normalizedDirection.z);
-			}
-		} else {
-			// 不移动时，清零水平速度
-			this.velocity.x = 0;
-			this.velocity.z = 0;
+		// 更新目标朝向
+		if (moveVector.lengthSquared() > 0.01) {
+			this.targetRotation = Math.atan2(moveVector.x, moveVector.z);
 		}
 
 		// 应用速度到位置

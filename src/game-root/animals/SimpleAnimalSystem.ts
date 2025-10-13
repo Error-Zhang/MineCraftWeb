@@ -83,7 +83,7 @@ export class SimpleAnimalSystem {
 	/**
 	 * 更新系统
 	 */
-	public update(deltaTime: number, playerPosition: Vector3): void {
+	public async update(deltaTime: number, playerPosition: Vector3): Promise<void> {
 		// 检查玩家是否进入新区块
 		const playerChunkX = Math.floor(playerPosition.x / this.chunkSetting.chunkSize);
 		const playerChunkZ = Math.floor(playerPosition.z / this.chunkSetting.chunkSize);
@@ -97,10 +97,9 @@ export class SimpleAnimalSystem {
 			this.updateChunks(playerChunkX, playerChunkZ);
 		}
 
-		// 更新所有动物
-		for (const animal of this.animals.values()) {
-			animal.update(deltaTime);
-		}
+		// 更新所有动物（异步）
+		const updatePromises = Array.from(this.animals.values()).map(animal => animal.update(deltaTime));
+		await Promise.all(updatePromises);
 
 		// 定期同步位置
 		const currentTime = Date.now();

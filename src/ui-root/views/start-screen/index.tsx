@@ -23,77 +23,8 @@ const renderPage = (page: ScreenPage, setPage: (page: ScreenPage) => void): Reac
 const StartScreen: React.FC<{ hidden: boolean }> = ({ hidden }) => {
 	const ref = useDroneBackgroundMotion(!hidden);
 	const [page, setPage] = useState<ScreenPage>("main");
-	const audioRef = useRef<HTMLAudioElement | null>(null);
-	const musicListRef = useRef<string[]>([]);
-	const currentIndexRef = useRef(0);
 
-	useEffect(() => {
-		let needsUserInteraction = false;
-
-		const loadMusic = async () => {
-			const modules = import.meta.glob("/src/ui-root/assets/musics/*", {
-				eager: true,
-			}) as Record<string, { default: string }>;
-			const sorted = Object.entries(modules).map(([_, mod]) => mod.default);
-			musicListRef.current = sorted;
-		};
-		let timer: NodeJS.Timeout;
-		const stop = () => {
-			// 如果已有 audio，先停止释放
-			if (audioRef.current) {
-				audioRef.current.pause();
-				audioRef.current.src = "";
-				audioRef.current = null;
-				clearTimeout(timer);
-			}
-		};
-
-		const playMusic = (index: number) => {
-			const list = musicListRef.current;
-			if (!list.length) return;
-
-			const audio = new Audio(list[index]);
-			audioRef.current = audio;
-
-			audio.addEventListener("ended", () => {
-				const nextIndex = (index + 1) % list.length;
-				currentIndexRef.current = nextIndex;
-				playMusic(nextIndex);
-			});
-
-			audio.volume = 0.5;
-			timer = setTimeout(() => {
-				if (useGameStore.getState().isGaming) {
-					audio.play();
-				}
-			}, 1000 * 60);
-		};
-
-		const handleUserInteraction = () => {
-			if (needsUserInteraction && musicListRef.current.length > 0) {
-				needsUserInteraction = false;
-				playMusic(currentIndexRef.current);
-				window.removeEventListener("pointerdown", handleUserInteraction);
-			}
-		};
-
-		loadMusic();
-		window.addEventListener("pointerdown", handleUserInteraction);
-
-		const unsub = useGameStore.subscribe((state, prevState) => {
-			if (state.isGaming && prevState.isGaming != state.isGaming) {
-				playMusic(currentIndexRef.current);
-			} else if (!state.isGaming && prevState.isGaming != state.isGaming) {
-				stop();
-			}
-		});
-
-		return () => {
-			unsub();
-			// 清理事件监听
-			window.removeEventListener("pointerdown", handleUserInteraction);
-		};
-	}, []);
+	// 音乐控制已迁移到 Game.ts 中的 BackgroundMusicManager
 
 	return (
 		<div className="start-screen" style={hidden ? { display: "none" } : {}} ref={ref}>

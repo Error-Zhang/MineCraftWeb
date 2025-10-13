@@ -15,9 +15,10 @@ import { SkyMaterial } from "@babylonjs/materials";
 import { GameTime } from "../systems/GameTime";
 import { SingleClass } from "@engine/core/Singleton.ts";
 import cloud from "./assets/Clouds.webp";
+import { WorldConfig } from "@engine/config/WorldConfig.ts";
 
 export class Environment extends SingleClass {
-	public readonly Size: number = 1024;
+	public readonly Size: number = 1024 * 8;
 	// 半径
 	public readonly MinUpdateDistance = this.Size * 0.4;
 
@@ -25,7 +26,7 @@ export class Environment extends SingleClass {
 	public shadowGenerator?: ShadowGenerator;
 
 	/** 每隔多少"游戏分钟"更新一次光照 */
-	public updateIntervalMinutes = 5;
+	public updateIntervalMinutes = 60;
 	public intensity = 2;
 	private readonly scene: Scene;
 	private skyBox!: Mesh;
@@ -43,10 +44,7 @@ export class Environment extends SingleClass {
 		this.createSky();
 		this.createCloud();
 		this.createLight();
-		// scene.fogMode = Scene.FOGMODE_LINEAR;
-		// scene.fogColor = new Color3(0.7, 0.8, 1.0); // 建议与天空渐变一致
-		// scene.fogStart = (ChunkManager.ViewDistance - 2) * Chunk.Size; // 近处开始无雾，单位为米
-		// scene.fogEnd = ChunkManager.ViewDistance * Chunk.Size; // 远处完全雾化
+		this.setupFog();
 	}
 
 	public static override get Instance(): Environment {
@@ -112,6 +110,8 @@ export class Environment extends SingleClass {
 			this.scene
 		);
 		this.skyBox.material = this.skyMaterial;
+		// 天空盒不受雾影响
+		this.skyBox.applyFog = false;
 	}
 
 	private createCloud() {
@@ -119,8 +119,12 @@ export class Environment extends SingleClass {
 		const cloudMat = new StandardMaterial("cloudMat", this.scene);
 		const cloudTexture = new Texture(cloud, this.scene);
 		cloudTexture.hasAlpha = true;
-		cloudTexture.uScale = 2;
-		cloudTexture.vScale = 2;
+
+		// 设置纹理平铺和循环模式
+		cloudTexture.uScale = 4; // 减少平铺次数，让每张云贴图更大
+		cloudTexture.vScale = 4;
+		cloudTexture.wrapU = Texture.WRAP_ADDRESSMODE; // 水平方向循环
+		cloudTexture.wrapV = Texture.WRAP_ADDRESSMODE; // 垂直方向循环
 
 		cloudMat.diffuseTexture = cloudTexture;
 		cloudMat.opacityTexture = cloudTexture;
@@ -129,7 +133,7 @@ export class Environment extends SingleClass {
 		cloudMat.useEmissiveAsIllumination = true;
 		cloudMat.useAlphaFromDiffuseTexture = true;
 
-		// 创建云层半球
+		// 创建云层平面
 		this.cloudLayer = MeshBuilder.CreateGround(
 			"cloudLayer",
 			{
@@ -138,9 +142,12 @@ export class Environment extends SingleClass {
 			},
 			this.scene
 		);
-		this.cloudLayer.position.y = this.Size / 2 - 24;
+		this.cloudLayer.position.y = 512;
 		this.cloudLayer.material = cloudMat;
 		this.cloudLayer.renderingGroupId = 0;
+
+		// 云层不受雾影响
+		this.cloudLayer.applyFog = false;
 	}
 
 	private createLight() {
@@ -188,5 +195,23 @@ export class Environment extends SingleClass {
 		// 停止现有动画并开始新的属性动画
 		this.scene.stopAnimation(this.skyBox);
 		this.scene.beginDirectAnimation(this.skyBox, [animation], 0, 100, false, 1);
+	}
+
+	/**
+	 * 设置雾效
+	 * 参考Minecraft和生存战争的雾效实现
+	 */
+	private setupFog() {
+		const scene = this.scene;
+
+		// 使用指数雾可以获得更自然的浓雾过渡效果
+		scene.fogMode = Scene.FOGMODE_LINEAR;
+
+		// 计算雾的范围（线性雾备用方案）
+		const viewDistanceInBlocks = WorldConfig.viewDistance * WorldConfig.chunkSize;
+		scene.fogStart = viewDistanceInBlocks * 0.6; // 更早开始有雾
+		scene.fogEnd = viewDistanceInBlocks; // 更早达到完全雾化
+
+		scene.fogColor = new Color3(0.98, 0.96, 0.94);
 	}
 }
