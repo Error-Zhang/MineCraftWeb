@@ -9,11 +9,7 @@ import { MiniBlockBuilder } from "@engine/renderer/MiniBlockBuilder.ts";
 import { Vector3 } from "@babylonjs/core";
 import { WorldConfig } from "@engine/config/WorldConfig";
 
-// 帧处理辅助函数
-const nextFrame = () => new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-
 export class ChunkManager extends SingleClass {
-	private _use: boolean = false;
 	// 实例部分
 	private chunks = new Map<string, Chunk>();
 	private readonly generator: (coords: Coords) => Promise<Chunk[]>;
@@ -27,23 +23,10 @@ export class ChunkManager extends SingleClass {
 	private readonly UNLOAD_DELAY = 1000 * 30; // 30秒后卸载
 	private readonly POLLING_TIME = 1000 * 30; // 每分检查一次
 
-	// 帧处理配置
-	private readonly PRIORITY_CHUNKS = 9; // 优先加载的区块数量（玩家周围3x3）
-	private readonly WAIT_TIME_PER_CHUNK = 10; // 每处理完一个区块等待的时间（毫秒）
-
 	constructor(generator: (coords: Coords) => Promise<Chunk[]>) {
 		super();
-		this._use = true;
 		this.generator = generator;
 		this.worldRenderer = WorldRenderer.getInstance();
-	}
-
-	public static get LoadDistance() {
-		return WorldConfig.viewDistance;
-	}
-
-	public static get UnloadDistance() {
-		return WorldConfig.viewDistance + 1;
 	}
 
 	public static override get Instance(): ChunkManager {
@@ -53,6 +36,14 @@ export class ChunkManager extends SingleClass {
 	// 半径(单位方块)
 	public static get MinUpdateDistance() {
 		return Chunk.Size;
+	}
+
+	public get LoadDistance() {
+		return WorldConfig.viewDistance;
+	}
+
+	public get UnloadDistance() {
+		return WorldConfig.viewDistance + 1;
 	}
 
 	// 静态方法：全局访问区块方块数据
@@ -86,17 +77,16 @@ export class ChunkManager extends SingleClass {
 		this.unloadCallbacks.push(callback);
 	}
 
-	public async updateChunksAround(x: number, z: number) {
+	public async updateChunksAround(x: number, z: number, frameInterval: number = 1) {
 		await this.withUpdateLock(async () => {
 			const start = performance.now();
 			try {
-				console.log("[VoxelEngine] chunk updating");
 				const [chunkX, chunkZ] = this.worldToChunk(x, z);
 
-				const minX = chunkX - ChunkManager.LoadDistance;
-				const maxX = chunkX + ChunkManager.LoadDistance;
-				const minZ = chunkZ - ChunkManager.LoadDistance;
-				const maxZ = chunkZ + ChunkManager.LoadDistance;
+				const minX = chunkX - this.LoadDistance;
+				const maxX = chunkX + this.LoadDistance;
+				const minZ = chunkZ - this.LoadDistance;
+				const maxZ = chunkZ + this.LoadDistance;
 
 				// 卸载超出范围的区块
 				this.getSortedChunks(Array.from(this.chunks.values()), chunkX, chunkZ)
@@ -106,9 +96,9 @@ export class ChunkManager extends SingleClass {
 						const dist = this.getChunkApproxDistance(x, z, chunkX, chunkZ);
 						chunk.isVisible = dist <= WorldConfig.viewDistance;
 						this.worldRenderer.setChunkEnabled(chunk);
-						if (dist > ChunkManager.UnloadDistance * 1.5) {
+						if (dist > this.UnloadDistance * 1.5) {
 							this.unloadChunk(chunk);
-						} else if (dist > ChunkManager.UnloadDistance) {
+						} else if (dist > this.UnloadDistance) {
 							this.scheduleUnloadChunk(chunk);
 						} else {
 							this.cancelScheduledUnload(chunk);
@@ -127,7 +117,7 @@ export class ChunkManager extends SingleClass {
 					}
 				}
 
-				// 批量生成区块
+				// 批量生成区块数据
 				if (coordsToLoad.length) {
 					const chunks = await this.generator(coordsToLoad);
 					for (const chunk of chunks) {
@@ -138,35 +128,37 @@ export class ChunkManager extends SingleClass {
 				// 按距离排序
 				const chunks = this.getSortedChunks(Array.from(this.chunks.values()), chunkX, chunkZ);
 
-				// 分离优先区块和普通区块
-				const priorityChunks = chunks.slice(0, this.PRIORITY_CHUNKS);
-				const normalChunks = chunks.slice(this.PRIORITY_CHUNKS);
+				let index = 0;
+				let frameCounter = 0;
+				const total = chunks.length;
 
-				// 优先加载玩家周围的区块（更快，可能掉帧）
-				for (let i = 0; i < priorityChunks.length; i++) {
-					if (!this._use) break;
-					await this.worldRenderer.buildChunk(priorityChunks[i]);
-					this.execUpdated((i + 1) / chunks.length);
-				}
+				const buildNextChunk = async () => {
+					if (index >= total) return;
+					// 每帧都会执行，但只在达到 frameInterval 时才真正构建下一个区块
+					frameCounter++;
 
-				// 普通区块：每处理一个就等待
-				for (let i = 0; i < normalChunks.length; i++) {
-					if (!this._use) break;
-
-					await this.worldRenderer.buildChunk(normalChunks[i]);
-					this.execUpdated((this.PRIORITY_CHUNKS + i + 1) / chunks.length);
-
-					// 每处理完一个区块等待，让浏览器处理其他任务
-					if (i < normalChunks.length - 1) {
-						await new Promise(resolve => setTimeout(resolve, this.WAIT_TIME_PER_CHUNK));
+					if (frameCounter < frameInterval) {
+						requestAnimationFrame(buildNextChunk);
+						return;
 					}
-				}
+					frameCounter = 0; // 重置计数
+
+					const chunk = chunks[index];
+					await this.worldRenderer.buildChunk(chunk);
+					this.execUpdated((index + 1) / total);
+					index++;
+
+					requestAnimationFrame(buildNextChunk);
+				};
+
+				// 启动分帧构建循环
+				requestAnimationFrame(buildNextChunk);
 			} catch (error) {
 				console.error("[VoxelEngine] Error updating chunks:", error);
 			} finally {
 				this.updateChunkEdges();
 				const end = performance.now();
-				// console.log(`[VoxelEngine] 区块更新完成，处理耗时: ${(end - start).toFixed(2)} ms`);
+				console.log(`[VoxelEngine] 区块更新完成，耗时 ${(end - start).toFixed(2)} ms`);
 			}
 		});
 	}
@@ -315,7 +307,6 @@ export class ChunkManager extends SingleClass {
 	}
 
 	dispose(): void {
-		this._use = false;
 		clearInterval(this.unloadTimer!);
 		this.chunks.clear();
 	}
