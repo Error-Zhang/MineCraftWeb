@@ -12,6 +12,10 @@ export class GameTime extends SingleClass {
 		super();
 	}
 
+	public static override get Instance(): GameTime {
+		return this.getInstance();
+	}
+
 	/** 当前是第几天 */
 	public get day(): number {
 		return Math.floor(this._totalGameSeconds / this.GAME_SECONDS_PER_DAY);
@@ -67,7 +71,7 @@ export class GameTime extends SingleClass {
 		// 如果是夜晚，时间流速加倍
 		const speedMultiplier = this.isDaytime ? 1 : 2;
 
-		this._totalGameSeconds += deltaTime * gameSecondsPerRealSecond * speedMultiplier;
+		this._totalGameSeconds += (deltaTime / 1000) * gameSecondsPerRealSecond * speedMultiplier;
 	}
 
 	/** 设置当前游戏总时间 */

@@ -74,7 +74,7 @@ export class ChunkRenderer {
 			const material = this.cloneMaterialForMesh(
 				BlockMaterialManager.Instance.getMaterialByKey(matKey)
 			);
-			const mesh = this.createMesh(matKey, vertexData, material, newRoot);
+			this.createMesh(matKey, vertexData, material, newRoot);
 			if (!filter.size) {
 				this.fadeAlpha(material, true);
 			}

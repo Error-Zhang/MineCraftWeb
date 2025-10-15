@@ -30,6 +30,7 @@ import HavokPhysics from "@babylonjs/havok";
 import { HavokPlugin } from "@babylonjs/core/Physics/v2";
 import ModelBlockManager from "@engine/renderer/ModelBlockManager.ts";
 import { WorldConfig } from "@engine/config/WorldConfig";
+import { WeatherSystem } from "@engine/systems/WeatherSystem.ts";
 // 注册着色器
 Effect.ShadersStore["waterVertexShader"] = waterVertexShader;
 Effect.ShadersStore["waterFragmentShader"] = waterFragmentShader;
@@ -49,6 +50,7 @@ export class VoxelEngine {
 	private chunkManager?: ChunkManager;
 	private miniBlockBuilder?: MiniBlockBuilder;
 	private havokPlugin?: HavokPlugin;
+	private weatherSystem?: WeatherSystem;
 
 	constructor(canvas: HTMLCanvasElement, engineType: "webgl" | "webgpu" = "webgl") {
 		this.initEngine(canvas, engineType);
@@ -115,9 +117,14 @@ export class VoxelEngine {
 
 	public start(scene: Scene) {
 		this.onUpdate(() => {
+			const dt = this.engine.getDeltaTime();
 			// 更新游戏时间
-			this.gameTime?.update(this.engine.getDeltaTime() / 1000);
+			this.gameTime?.update(dt);
 			this.environment?.updateLighting();
+
+			// 更新天气系统
+			this.weatherSystem?.update(dt);
+			this.environment?.updateCloudEnvironment();
 		});
 		this.engine.runRenderLoop(() => {
 			scene.render();
@@ -206,6 +213,8 @@ export class VoxelEngine {
 	private registerWorldRelative(scene: Scene) {
 		this.gameTime = Singleton.create(GameTime);
 		this._worldContext.add(this.gameTime);
+		this.weatherSystem = Singleton.create(WeatherSystem);
+		this._worldContext.add(this.weatherSystem);
 		this.environment = Singleton.create(Environment, scene);
 		this._worldContext.add(this.environment);
 		this.worldRenderer = Singleton.create(WorldRenderer, scene);

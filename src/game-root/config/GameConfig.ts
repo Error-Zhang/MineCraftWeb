@@ -57,7 +57,7 @@ export class GameConfig {
 	 */
 	public static readonly RENDER = {
 		// 渲染距离（区块）
-		renderDistance: 8,
+		renderDistance: 6,
 
 		// 是否启用阴影
 		enableShadows: true,
@@ -97,8 +97,3 @@ export class GameConfig {
 		console.log(`[GameConfig] Debug mode ${enabled ? "enabled" : "disabled"}`);
 	}
 }
-
-// 导出便捷访问
-export const AnimalConfig = GameConfig.ANIMAL_SYSTEM;
-export const DebugConfig = GameConfig.DEBUG;
-export const RenderConfig = GameConfig.RENDER;

@@ -385,7 +385,7 @@ export class Game {
 	private initWorld(setting: IChunkSetting) {
 		const controller = this.voxelEngine.registerChunk(this.getWorldGenerator(), {
 			...setting,
-			viewDistance: 6, // 经过多次测试6是最稳定的值
+			viewDistance: GameConfig.RENDER.renderDistance,
 		});
 		useWorldStore.setState({ worldController: controller });
 		useWorldStore.setState({ chunkSetting: setting });

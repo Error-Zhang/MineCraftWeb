@@ -11,20 +11,19 @@ import {
 	Texture,
 	Vector3,
 } from "@babylonjs/core";
-import { SkyMaterial } from "@babylonjs/materials";
-import { GameTime } from "../systems/GameTime";
+import { CloudRenderer } from "../renderer/CloudRenderer.ts";
 import { SingleClass } from "@engine/core/Singleton.ts";
-import cloud from "./assets/Clouds.webp";
+import { GameTime } from "@engine/systems/GameTime.ts";
+import { SkyMaterial } from "@babylonjs/materials";
 import { WorldConfig } from "@engine/config/WorldConfig.ts";
+import Clouds from "./assets/Clouds.webp";
 
 export class Environment extends SingleClass {
-	public readonly Size: number = 1024 * 8;
+	public static readonly Size: number = 1024 * 8;
 	// 半径
 	public readonly MinUpdateDistance = this.Size * 0.4;
-
 	public openShadow: number = 1;
 	public shadowGenerator?: ShadowGenerator;
-
 	/** 每隔多少"游戏分钟"更新一次光照 */
 	public updateIntervalMinutes = 60;
 	public intensity = 2;
@@ -36,19 +35,29 @@ export class Environment extends SingleClass {
 	private hemisphericLight!: HemisphericLight;
 	private _lastUpdateStep = -1;
 	private cloudLayer!: Mesh;
+	// 新增云层渲染器
+	private cloudRenderer!: CloudRenderer;
 
 	constructor(scene: Scene) {
 		super();
 		this.scene = scene;
-		this.gameTime = GameTime.getInstance();
+		this.gameTime = GameTime.Instance;
 		this.createSky();
 		this.createCloud();
 		this.createLight();
 		this.setupFog();
+
+		// 初始化云层渲染器
+		this.cloudRenderer = new CloudRenderer(scene);
+		this.cloudRenderer.startAnimations();
 	}
 
 	public static override get Instance(): Environment {
 		return this.getInstance();
+	}
+
+	get Size(): number {
+		return Environment.Size;
 	}
 
 	public clearShadows(): void {
@@ -61,12 +70,17 @@ export class Environment extends SingleClass {
 	public dispose(): void {
 		this.clearShadows();
 		this.cloudLayer.dispose();
+		this.cloudRenderer.dispose();
 	}
 
 	public updatePosition(x: number, z: number) {
 		this.skyBox.position.set(x, 0, z);
 		this.directionalLight?.position.set(x, this.Size, z);
 		this.cloudLayer?.position.set(x, this.cloudLayer.position.y, z);
+	}
+
+	public updateCloudEnvironment() {
+		this.cloudRenderer.updateEnvironmentAdaptation();
 	}
 
 	public updateLighting() {
@@ -117,7 +131,7 @@ export class Environment extends SingleClass {
 	private createCloud() {
 		// 创建云层材质
 		const cloudMat = new StandardMaterial("cloudMat", this.scene);
-		const cloudTexture = new Texture(cloud, this.scene);
+		const cloudTexture = new Texture(Clouds, this.scene);
 		cloudTexture.hasAlpha = true;
 
 		// 设置纹理平铺和循环模式
@@ -204,13 +218,13 @@ export class Environment extends SingleClass {
 	private setupFog() {
 		const scene = this.scene;
 
-		// 使用指数雾可以获得更自然的浓雾过渡效果
+		// 线性雾
 		scene.fogMode = Scene.FOGMODE_LINEAR;
 
-		// 计算雾的范围（线性雾备用方案）
+		// 计算雾的范围
 		const viewDistanceInBlocks = WorldConfig.viewDistance * WorldConfig.chunkSize;
-		scene.fogStart = viewDistanceInBlocks * 0.6; // 更早开始有雾
-		scene.fogEnd = viewDistanceInBlocks; // 更早达到完全雾化
+		scene.fogStart = viewDistanceInBlocks * 0.8; // 开始有雾
+		scene.fogEnd = viewDistanceInBlocks * 1.5; // 达到完全雾化
 
 		scene.fogColor = new Color3(0.98, 0.96, 0.94);
 	}

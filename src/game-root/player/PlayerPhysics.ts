@@ -241,7 +241,6 @@ export class PlayerPhysics {
 	 * 着陆回调
 	 */
 	private onLanded(): void {
-		console.log("onLanded");
 		// 着陆时重置垂直速度
 		if (this.velocityY < 0) {
 			this.velocityY = 0;
