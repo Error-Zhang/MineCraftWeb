@@ -57,7 +57,7 @@ export class GameConfig {
 	 */
 	public static readonly RENDER = {
 		// 渲染距离（区块）
-		renderDistance: 6,
+		renderDistance: 8,
 
 		// 是否启用阴影
 		enableShadows: true,

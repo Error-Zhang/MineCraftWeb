@@ -77,7 +77,7 @@ export class ChunkManager extends SingleClass {
 		this.unloadCallbacks.push(callback);
 	}
 
-	public async updateChunksAround(x: number, z: number, frameInterval: number = 1) {
+	public async updateChunksAround(x: number, z: number) {
 		await this.withUpdateLock(async () => {
 			const start = performance.now();
 			try {
@@ -129,30 +129,26 @@ export class ChunkManager extends SingleClass {
 				const chunks = this.getSortedChunks(Array.from(this.chunks.values()), chunkX, chunkZ);
 
 				let index = 0;
-				let frameCounter = 0;
 				const total = chunks.length;
 
-				const buildNextChunk = async () => {
-					if (index >= total) return;
-					// 每帧都会执行，但只在达到 frameInterval 时才真正构建下一个区块
-					frameCounter++;
+				await new Promise(resolve => {
+					const buildNextChunk = async () => {
+						if (index >= total) {
+							resolve(1);
+							return;
+						}
 
-					if (frameCounter < frameInterval) {
+						const chunk = chunks[index];
+						await this.worldRenderer.buildChunk(chunk);
+						this.execUpdated((index + 1) / total);
+						index++;
+
 						requestAnimationFrame(buildNextChunk);
-						return;
-					}
-					frameCounter = 0; // 重置计数
+					};
 
-					const chunk = chunks[index];
-					await this.worldRenderer.buildChunk(chunk);
-					this.execUpdated((index + 1) / total);
-					index++;
-
+					// 启动分帧构建循环
 					requestAnimationFrame(buildNextChunk);
-				};
-
-				// 启动分帧构建循环
-				requestAnimationFrame(buildNextChunk);
+				});
 			} catch (error) {
 				console.error("[VoxelEngine] Error updating chunks:", error);
 			} finally {
